@@ -8,9 +8,6 @@ import com.firinyonetim.backend.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -19,7 +16,6 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
     private final UserRepository userRepository;
-    private final InMemoryUserDetailsManager inMemoryUserDetailsManager; // In-memory manager'ı inject et
 
     public LoginResponse login(LoginRequest request) {
         // 1. Kimlik doğrulama yap
@@ -27,41 +23,19 @@ public class AuthService {
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
         );
 
-        // 2. Token oluşturmak için UserDetails'i bul.
-        // Önce in-memory'de ara, bulamazsan veritabanında ara.
-        UserDetails userDetails;
-        try {
-            // In-memory'de kullanıcıyı bulmaya çalış
-            userDetails = inMemoryUserDetailsManager.loadUserByUsername(request.getUsername());
-        } catch (UsernameNotFoundException e) {
-            // In-memory'de yoksa, veritabanından bul
-            userDetails = userRepository.findByUsername(request.getUsername())
-                    .orElseThrow(() -> new UsernameNotFoundException("User not found after successful authentication."));
-        }
+        // 2. Kullanıcıyı veritabanından bul (Doğrulama başarılı olduğu için burada kesin bulur)
+        User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new IllegalStateException("Kimlik doğrulama başarılı ama kullanıcı veritabanında bulunamadı."));
 
         // 3. Token'ı oluştur
-        String jwtToken = jwtTokenProvider.generateToken(userDetails);
+        String jwtToken = jwtTokenProvider.generateToken(user);
 
         // 4. Response'u oluştur
-        LoginResponse.LoginResponseBuilder responseBuilder = LoginResponse.builder()
+        return LoginResponse.builder()
                 .token(jwtToken)
-                .username(userDetails.getUsername());
-
-        // Eğer kullanıcı veritabanından geldiyse (User tipindeyse), ID ve Role ekle
-        if (userDetails instanceof User) {
-            User dbUser = (User) userDetails;
-            responseBuilder.userId(dbUser.getId());
-            responseBuilder.role(dbUser.getRole());
-        } else {
-            // Eğer in-memory kullanıcı ise, rolü authorities'ten çıkar
-            String role = userDetails.getAuthorities().stream()
-                    .findFirst()
-                    .orElseThrow()
-                    .getAuthority()
-                    .replace("ROLE_", "");
-            responseBuilder.role(com.firinyonetim.backend.entity.Role.valueOf(role));
-        }
-
-        return responseBuilder.build();
+                .userId(user.getId())
+                .username(user.getUsername())
+                .role(user.getRole())
+                .build();
     }
 }

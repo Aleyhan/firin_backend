@@ -18,7 +18,7 @@ public class UserController {
     private final UserService userService;
 
     @PostMapping
-        @PreAuthorize("hasRole('YONETICI') or hasRole('DEVELOPER')")
+    @PreAuthorize("hasRole('YONETICI') or hasRole('DEVELOPER')")
     public ResponseEntity<UserResponse> createUser(@RequestBody UserCreateRequest request) {
         return ResponseEntity.ok(userService.createUser(request));
     }
