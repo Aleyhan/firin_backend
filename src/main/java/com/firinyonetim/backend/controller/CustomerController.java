@@ -1,6 +1,7 @@
 package com.firinyonetim.backend.controller;
 
 import com.firinyonetim.backend.dto.customer.request.CustomerCreateRequest;
+import com.firinyonetim.backend.dto.customer.request.CustomerUpdateRequest;
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
 import com.firinyonetim.backend.dto.special_price.request.SpecialPriceRequest;
 import com.firinyonetim.backend.service.CustomerService;
@@ -26,5 +27,14 @@ public class CustomerController {
             @PathVariable Long customerId,
             @RequestBody SpecialPriceRequest request) {
         return ResponseEntity.ok(customerService.addOrUpdateSpecialPrice(customerId, request));
+    }
+
+    // ... CustomerController sınıfının içinde ...
+
+    @PutMapping("/{customerId}")
+    public ResponseEntity<CustomerResponse> updateCustomer(
+            @PathVariable Long customerId,
+            @RequestBody CustomerUpdateRequest request) {
+        return ResponseEntity.ok(customerService.updateCustomer(customerId, request));
     }
 }

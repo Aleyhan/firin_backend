@@ -3,6 +3,7 @@ package com.firinyonetim.backend.controller;
 import com.firinyonetim.backend.dto.product.request.ProductCreateRequest;
 import com.firinyonetim.backend.dto.product.response.ProductResponse;
 import com.firinyonetim.backend.service.ProductService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,7 +18,7 @@ public class ProductController {
     private final ProductService productService;
 
     @PostMapping
-    public ResponseEntity<ProductResponse> createProduct(@RequestBody ProductCreateRequest request) {
+    public ResponseEntity<ProductResponse> createProduct(@Valid @RequestBody ProductCreateRequest request) {
         return ResponseEntity.ok(productService.createProduct(request));
     }
 
