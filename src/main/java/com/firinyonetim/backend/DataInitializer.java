@@ -18,15 +18,15 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         // Uygulama başladığında, "admin" kullanıcısı var mı diye kontrol et
-        if (userRepository.findByUsername("admin1").isEmpty()) {
+        if (userRepository.findByUsername("admin").isEmpty()) {
             System.out.println("Admin kullanıcısı bulunamadı, oluşturuluyor...");
 
             User adminUser = new User();
-            adminUser.setUsername("admin1");
+            adminUser.setUsername("admin");
             // Şifreyi mutlaka hash'leyerek kaydet
-            adminUser.setPassword(passwordEncoder.encode("admin123"));
+            adminUser.setPassword(passwordEncoder.encode("admin"));
             adminUser.setName("Admin");
-            adminUser.setSurname("Fırın");
+            adminUser.setSurname("Admin");
             adminUser.setRole(Role.YONETICI);
             adminUser.setPhoneNumber("0000000000");
 

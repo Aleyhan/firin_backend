@@ -6,4 +6,6 @@ import java.util.Optional;
 
 public interface SpecialProductPriceRepository extends JpaRepository<SpecialProductPrice, Long> {
     Optional<SpecialProductPrice> findByCustomerIdAndProductId(Long customerId, Long productId);
+    // ...
+    void deleteByCustomerIdAndProductId(Long customerId, Long productId);
 }

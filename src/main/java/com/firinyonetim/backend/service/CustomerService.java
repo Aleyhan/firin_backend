@@ -5,6 +5,7 @@ import com.firinyonetim.backend.dto.customer.request.CustomerUpdateRequest;
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
 import com.firinyonetim.backend.dto.special_price.request.SpecialPriceRequest;
 import com.firinyonetim.backend.entity.*;
+import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.mapper.CustomerMapper;
 import com.firinyonetim.backend.repository.CustomerRepository;
 import com.firinyonetim.backend.repository.ProductRepository;
@@ -140,4 +141,27 @@ public class CustomerService {
 
         return customerMapper.toCustomerResponse(updatedCustomer);
     }
+
+    // ... CustomerService sınıfının içinde ...
+
+    @Transactional
+    public void deleteCustomer(Long customerId) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+        customer.setActive(false);
+        customerRepository.save(customer);
+    }
+
+    @Transactional
+    public void removeSpecialPrice(Long customerId, Long productId) {
+        // Önce varlıkların olup olmadığını kontrol et
+        if (!customerRepository.existsById(customerId)) {
+            throw new ResourceNotFoundException("Customer not found with id: " + customerId);
+        }
+        if (!productRepository.existsById(productId)) {
+            throw new ResourceNotFoundException("Product not found with id: " + productId);
+        }
+        specialPriceRepository.deleteByCustomerIdAndProductId(customerId, productId);
+    }
+
 }

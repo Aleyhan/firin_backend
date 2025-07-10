@@ -10,6 +10,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/customers")
 @RequiredArgsConstructor
@@ -36,5 +38,29 @@ public class CustomerController {
             @PathVariable Long customerId,
             @RequestBody CustomerUpdateRequest request) {
         return ResponseEntity.ok(customerService.updateCustomer(customerId, request));
+    }
+
+    // ... CustomerController sınıfının içinde ...
+
+    @GetMapping
+    public ResponseEntity<List<CustomerResponse>> getAllCustomers() {
+        return ResponseEntity.ok(customerService.getAllCustomers());
+    }
+
+    @GetMapping("/{customerId}")
+    public ResponseEntity<CustomerResponse> getCustomerById(@PathVariable Long customerId) {
+        return ResponseEntity.ok(customerService.getCustomerById(customerId));
+    }
+
+    @DeleteMapping("/{customerId}")
+    public ResponseEntity<Void> deleteCustomer(@PathVariable Long customerId) {
+        customerService.deleteCustomer(customerId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{customerId}/special-prices/{productId}")
+    public ResponseEntity<Void> removeSpecialPrice(@PathVariable Long customerId, @PathVariable Long productId) {
+        customerService.removeSpecialPrice(customerId, productId);
+        return ResponseEntity.noContent().build();
     }
 }
