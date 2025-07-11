@@ -23,6 +23,11 @@ public class Transaction {
     @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
 
+    // YENİ EKLENEN ALAN
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "route_id", nullable = true) // Başlangıçta null olabilir, şoförsüz işlemler için
+    private Route route;
+
     @Column(nullable = false)
     private LocalDateTime transactionDate = LocalDateTime.now();
 

@@ -12,5 +12,7 @@ public interface TransactionMapper {
     @Mapping(source = "customer.name", target = "customerName")
     @Mapping(source = "createdBy.id", target = "createdByUserId")
     @Mapping(source = "createdBy.username", target = "createdByUsername")
+    @Mapping(source = "route.id", target = "routeId") // YENİ EKLENDİ
+    @Mapping(source = "route.name", target = "routeName") // YENİ EKLENDİ
     TransactionResponse toTransactionResponse(Transaction transaction);
 }

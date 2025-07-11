@@ -3,6 +3,7 @@ package com.firinyonetim.backend.controller;
 import com.firinyonetim.backend.dto.customer.request.CustomerCreateRequest;
 import com.firinyonetim.backend.dto.customer.request.CustomerUpdateRequest;
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
+import com.firinyonetim.backend.dto.route.response.RouteResponse;
 import com.firinyonetim.backend.dto.special_price.request.SpecialPriceRequest;
 import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
 import com.firinyonetim.backend.service.CustomerService;
@@ -81,5 +82,10 @@ public class CustomerController {
     public ResponseEntity<List<TransactionResponse>> getCustomerLedger(@PathVariable Long customerId) {
         List<TransactionResponse> transactions = transactionService.getTransactionsByCustomerId(customerId);
         return ResponseEntity.ok(transactions);
+    }
+    // controller/CustomerController.java
+    @GetMapping("/{customerId}/routes")
+    public ResponseEntity<List<RouteResponse>> getRoutesByCustomer(@PathVariable Long customerId) {
+        return ResponseEntity.ok(routeService.getRoutesByCustomer(customerId));
     }
 }

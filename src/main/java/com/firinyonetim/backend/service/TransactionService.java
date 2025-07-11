@@ -26,6 +26,8 @@ public class TransactionService {
     private final ProductRepository productRepository;
     private final SpecialProductPriceRepository specialPriceRepository;
     private final TransactionMapper transactionMapper;
+    private final RouteRepository routeRepository;
+
 
     @Transactional
     public TransactionResponse createTransaction(TransactionCreateRequest request) {
@@ -39,6 +41,13 @@ public class TransactionService {
         transaction.setCustomer(customer);
         transaction.setCreatedBy(currentUser);
         transaction.setNotes(request.getNotes());
+
+        // YENİ: Route (Liste) bilgisini işle
+        if (request.getRouteId() != null) {
+            Route route = routeRepository.findById(request.getRouteId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + request.getRouteId()));
+            transaction.setRoute(route);
+        }
 
         BigDecimal balanceChange = BigDecimal.ZERO;
 

@@ -9,6 +9,8 @@ public class TransactionResponse {
     private Long id;
     private Long customerId;
     private String customerName;
+    private Long routeId; // YENİ EKLENDİ
+    private String routeName; // YENİ EKLENDİ
     private LocalDateTime transactionDate;
     private String notes;
     private Long createdByUserId;
