@@ -4,7 +4,9 @@ import com.firinyonetim.backend.dto.customer.request.CustomerCreateRequest;
 import com.firinyonetim.backend.dto.customer.request.CustomerUpdateRequest;
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
 import com.firinyonetim.backend.dto.special_price.request.SpecialPriceRequest;
+import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
 import com.firinyonetim.backend.service.CustomerService;
+import com.firinyonetim.backend.service.TransactionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -14,10 +16,15 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/customers")
-@RequiredArgsConstructor
 @PreAuthorize("hasRole('YONETICI')")
 public class CustomerController {
     private final CustomerService customerService;
+    private final TransactionService transactionService; // YENİ: TransactionService'i inject et
+
+    public CustomerController(CustomerService customerService, TransactionService transactionService) {
+        this.customerService = customerService;
+        this.transactionService = transactionService;
+    }
 
     @PostMapping
     public ResponseEntity<CustomerResponse> createCustomer(@RequestBody CustomerCreateRequest request) {
@@ -62,5 +69,13 @@ public class CustomerController {
     public ResponseEntity<Void> removeSpecialPrice(@PathVariable Long customerId, @PathVariable Long productId) {
         customerService.removeSpecialPrice(customerId, productId);
         return ResponseEntity.noContent().build();
+    }
+
+    // YENİ ENDPOINT: Müşterinin hesap ekstresini (ledger) getirir.
+    @GetMapping("/{customerId}/ledger")
+    @PreAuthorize("hasRole('YONETICI')")
+    public ResponseEntity<List<TransactionResponse>> getCustomerLedger(@PathVariable Long customerId) {
+        List<TransactionResponse> transactions = transactionService.getTransactionsByCustomerId(customerId);
+        return ResponseEntity.ok(transactions);
     }
 }

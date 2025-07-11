@@ -42,14 +42,11 @@ public class ProductService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
 
-        product.setName(request.getName());
-        product.setBasePrice(request.getBasePrice());
-        product.setVatRate(request.getVatRate());
-        product.setProductGroup(request.getProductGroup());
-        product.setUnit(request.getUnit());
-        product.setGrammage(request.getGrammage());
-        product.setActive(request.getIsActive());
+        // Eskiden burada tüm alanları tek tek set ediyorduk.
+        // Şimdi bu işi tek satırda MapStruct'a yaptırıyoruz.
+        productMapper.updateProductFromDto(request, product);
 
+        // Güncellenmiş ürünü kaydet ve response'a çevirip döndür.
         return productMapper.toProductResponse(productRepository.save(product));
     }
 
