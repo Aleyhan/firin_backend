@@ -6,6 +6,7 @@ import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
 import com.firinyonetim.backend.dto.special_price.request.SpecialPriceRequest;
 import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
 import com.firinyonetim.backend.service.CustomerService;
+import com.firinyonetim.backend.service.RouteService;
 import com.firinyonetim.backend.service.TransactionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -20,10 +21,13 @@ import java.util.List;
 public class CustomerController {
     private final CustomerService customerService;
     private final TransactionService transactionService; // YENİ: TransactionService'i inject et
+    private final RouteService routeService; // YENİ: RouteService'i inject et
 
-    public CustomerController(CustomerService customerService, TransactionService transactionService) {
+    public CustomerController(CustomerService customerService, TransactionService transactionService,
+                              RouteService routeService) {
         this.customerService = customerService;
         this.transactionService = transactionService;
+        this.routeService = routeService;
     }
 
     @PostMapping
