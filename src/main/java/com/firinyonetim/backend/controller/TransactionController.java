@@ -1,6 +1,7 @@
 package com.firinyonetim.backend.controller;
 
 import com.firinyonetim.backend.dto.transaction.request.TransactionCreateRequest;
+import com.firinyonetim.backend.dto.transaction.request.TransactionItemPriceUpdateRequest;
 import com.firinyonetim.backend.dto.transaction.request.TransactionUpdateRequest;
 import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
 import com.firinyonetim.backend.service.CustomerService;
@@ -15,6 +16,12 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.bind.annotation.GetMapping; // GetMapping import'u
 import org.springframework.web.bind.annotation.PathVariable; // PathVariable import'u
 import java.util.List; // List import'u
+import org.springframework.web.bind.annotation.PostMapping; // PostMapping import'u
+import org.springframework.web.bind.annotation.PutMapping; // PutMapping import'u
+import org.springframework.web.bind.annotation.DeleteMapping; // DeleteMapping import'u
+import org.springframework.web.bind.annotation.RequestBody; // RequestBody import'u
+import org.springframework.web.bind.annotation.RequestMapping; // RequestMapping import'u
+import org.springframework.web.bind.annotation.PatchMapping;
 
 @RestController
 @RequestMapping("/api/transactions")
@@ -47,6 +54,16 @@ public class TransactionController {
     @GetMapping("/{transactionId}")
     public ResponseEntity<TransactionResponse> getTransactionById(@PathVariable Long transactionId) {
         return ResponseEntity.ok(transactionService.getTransactionById(transactionId));
+    }
+
+    // ... TransactionController sınıfının içinde ...
+
+    @PatchMapping("/{transactionId}/items/{itemId}/price")
+    public ResponseEntity<TransactionResponse> updateTransactionItemPrice(
+            @PathVariable Long transactionId,
+            @PathVariable Long itemId,
+            @Valid @RequestBody TransactionItemPriceUpdateRequest request) {
+        return ResponseEntity.ok(transactionService.updateTransactionItemPrice(transactionId, itemId, request));
     }
 
 

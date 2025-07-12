@@ -1,6 +1,7 @@
 package com.firinyonetim.backend.service;
 
 import com.firinyonetim.backend.dto.transaction.request.TransactionCreateRequest;
+import com.firinyonetim.backend.dto.transaction.request.TransactionItemPriceUpdateRequest;
 import com.firinyonetim.backend.dto.transaction.request.TransactionUpdateRequest;
 import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
 import com.firinyonetim.backend.entity.*;
@@ -27,6 +28,8 @@ public class TransactionService {
     private final SpecialProductPriceRepository specialPriceRepository;
     private final TransactionMapper transactionMapper;
     private final RouteRepository routeRepository;
+    private final TransactionItemRepository transactionItemRepository;
+
 
 
     @Transactional
@@ -217,6 +220,58 @@ public class TransactionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
 
         return transactionMapper.toTransactionResponse(transaction);
+    }
+
+    // ... TransactionService sınıfının içinde ...
+
+    @Transactional
+    public TransactionResponse updateTransactionItemPrice(Long transactionId, Long itemId, TransactionItemPriceUpdateRequest request) {
+        // 1. İlgili TransactionItem'ı (kalemi) bul.
+        // Transaction'a ait olduğundan emin olarak bulmak daha güvenlidir.
+        TransactionItem item = transactionItemRepository.findById(itemId)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction item not found with id: " + itemId));
+
+        // Güvenlik kontrolü: Bu item, gerçekten belirtilen transaction'a mı ait?
+        if (!item.getTransaction().getId().equals(transactionId)) {
+            throw new IllegalStateException("Item with id " + itemId + " does not belong to transaction with id " + transactionId);
+        }
+
+        // 2. Eski finansal etkiyi hesapla.
+        // Bu kalemin bakiye üzerindeki eski etkisi nedir?
+        BigDecimal oldItemBalanceChange = BigDecimal.ZERO;
+        if (item.getType() == ItemType.SATIS) {
+            oldItemBalanceChange = item.getTotalPrice(); // Satış ise borcu artırmıştı
+        } else if (item.getType() == ItemType.IADE) {
+            oldItemBalanceChange = item.getTotalPrice().negate(); // İade ise borcu azaltmıştı (negatif etki)
+        }
+
+        // 3. Kalemin fiyatını ve toplam fiyatını güncelle.
+        BigDecimal newUnitPrice = request.getNewUnitPrice();
+        item.setUnitPrice(newUnitPrice);
+        item.setTotalPrice(newUnitPrice.multiply(BigDecimal.valueOf(item.getQuantity())));
+        transactionItemRepository.save(item); // Değişikliği kaydet
+
+        // 4. Yeni finansal etkiyi hesapla.
+        BigDecimal newItemBalanceChange = BigDecimal.ZERO;
+        if (item.getType() == ItemType.SATIS) {
+            newItemBalanceChange = item.getTotalPrice();
+        } else if (item.getType() == ItemType.IADE) {
+            newItemBalanceChange = item.getTotalPrice().negate();
+        }
+
+        // 5. Müşteri bakiyesini düzelt.
+        // Önce eski etkiyi geri al, sonra yeni etkiyi ekle.
+        BigDecimal correction = newItemBalanceChange.subtract(oldItemBalanceChange);
+        Customer customer = item.getTransaction().getCustomer();
+        customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().add(correction));
+        customerRepository.save(customer);
+
+        // 6. Güncellenmiş Transaction'ın tamamını döndür.
+        // findByIdWithDetails ile tüm detayları taze bir şekilde çekiyoruz.
+        Transaction updatedTransaction = transactionRepository.findByIdWithDetails(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found after update with id: " + transactionId));
+
+        return transactionMapper.toTransactionResponse(updatedTransaction);
     }
 
 }
