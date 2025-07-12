@@ -201,7 +201,9 @@ public class CustomerService {
                 case "notes":
                     customer.setNotes((String) value);
                     break;
-                // Do not allow customerCode updates
+                case "customerCode":
+                    customer.setCustomerCode((String) value);
+                    break;
             }
         });
 
