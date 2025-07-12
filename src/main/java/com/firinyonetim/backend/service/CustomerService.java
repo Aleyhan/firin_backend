@@ -202,8 +202,26 @@ public class CustomerService {
                     customer.setNotes((String) value);
                     break;
                 case "customerCode":
-                    customer.setCustomerCode((String) value);
+                    if (value == null || !(value instanceof String)) {
+                        throw new IllegalArgumentException("Müşteri kodu metin formatında olmalıdır.");
+                    }
+                    String newCode = (String) value;
+
+                    // 1. Uzunluk Kontrolü
+                    if (newCode.length() != 4) {
+                        throw new IllegalArgumentException("Müşteri kodu tam olarak 4 haneli olmalıdır.");
+                    }
+
+                    // 2. Benzersizlik (Unique) Kontrolü
+                    // Yeni kodun, mevcut müşteri dışındaki başka bir müşteriye ait olup olmadığını kontrol et
+                    if (customerRepository.existsByCustomerCodeAndIdNot(newCode, customer.getId())) {
+                        throw new IllegalStateException("Müşteri kodu '" + newCode + "' zaten başka bir müşteri tarafından kullanılıyor.");
+                    }
+
+                    // Validasyonlar başarılıysa, kodu güncelle
+                    customer.setCustomerCode(newCode);
                     break;
+                // YENİ EKLENEN BLOK SONU
             }
         });
 
