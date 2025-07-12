@@ -7,9 +7,11 @@ import com.firinyonetim.backend.dto.special_price.request.SpecialPriceRequest;
 import com.firinyonetim.backend.entity.*;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.mapper.CustomerMapper;
+import com.firinyonetim.backend.mapper.ProductMapper;
 import com.firinyonetim.backend.repository.CustomerRepository;
 import com.firinyonetim.backend.repository.ProductRepository;
 import com.firinyonetim.backend.repository.SpecialProductPriceRepository;
+import com.firinyonetim.backend.repository.TaxInfoRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,8 @@ public class CustomerService {
     private final ProductRepository productRepository;
     private final SpecialProductPriceRepository specialPriceRepository;
     private final CustomerMapper customerMapper;
+    private final ProductMapper productMapper;
+    private final TaxInfoRepository taxInfoRepository;
 
     public List<CustomerResponse> getAllCustomers() {
         return customerRepository.findAll().stream()
@@ -223,9 +227,64 @@ public class CustomerService {
                     break;
                 // YENİ EKLENEN BLOK SONU
             }
-        });
+        }
+        );
 
         Customer updatedCustomer = customerRepository.save(customer);
         return customerMapper.toCustomerResponse(updatedCustomer);
     }
+
+    // YENİ METOT
+    @Transactional
+    public CustomerResponse updateCustomerTaxInfo(Long customerId, Map<String, String> updates) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+
+        // Müşterinin mevcut vergi bilgisini al veya yoksa yeni bir tane oluştur.
+        TaxInfo taxInfo = customer.getTaxInfo();
+        if (taxInfo == null) {
+            // Eğer request'te en az bir alan varsa yeni TaxInfo oluştur.
+            if (updates == null || updates.isEmpty()) {
+                // Güncellenecek bir şey yoksa, müşteriyi olduğu gibi döndür.
+                return customerMapper.toCustomerResponse(customer);
+            }
+            taxInfo = new TaxInfo();
+            taxInfo.setCustomer(customer);
+            customer.setTaxInfo(taxInfo);
+        }
+
+        final TaxInfo finalTaxInfo = taxInfo; // Lambda içinde kullanmak için
+
+        updates.forEach((key, value) -> {
+            // Değerin boş veya null olmamasını kontrol edelim.
+            if (value == null || value.trim().isEmpty()) {
+                throw new IllegalArgumentException("'" + key + "' alanı boş olamaz.");
+            }
+
+            switch (key) {
+                case "tradeName":
+                    finalTaxInfo.setTradeName(value);
+                    break;
+                case "taxOffice":
+                    finalTaxInfo.setTaxOffice(value);
+                    break;
+                case "taxNumber":
+                    // Benzersizlik kontrolü
+                    if (taxInfoRepository.existsByTaxNumberAndCustomerIdNot(value, customerId)) {
+                        throw new IllegalStateException("Vergi numarası '" + value + "' zaten başka bir müşteri tarafından kullanılıyor.");
+                    }
+                    finalTaxInfo.setTaxNumber(value);
+                    break;
+                default:
+                    // Bilinmeyen bir anahtar gelirse hata fırlatabilir veya görmezden gelebiliriz.
+                    // Şimdilik görmezden gelelim.
+                    break;
+            }
+        });
+
+        // TaxInfo'nun kaydedilmesi için ana Customer nesnesini kaydetmek yeterlidir (Cascade ayarı sayesinde).
+        Customer updatedCustomer = customerRepository.save(customer);
+        return customerMapper.toCustomerResponse(updatedCustomer);
+    }
+
 }

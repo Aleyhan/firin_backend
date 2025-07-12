@@ -97,4 +97,13 @@ public class CustomerController {
         return ResponseEntity.ok(customerService.updateCustomerFields(customerId, updates));
     }
 
+    // YENİ ENDPOINT: Müşterinin vergi bilgilerini kısmi olarak günceller.
+    @PatchMapping("/{customerId}/tax-info")
+    @PreAuthorize("hasRole('YONETICI')")
+    public ResponseEntity<CustomerResponse> updateCustomerTaxInfo(
+            @PathVariable Long customerId,
+            @RequestBody Map<String, String> updates) {
+        return ResponseEntity.ok(customerService.updateCustomerTaxInfo(customerId, updates));
+    }
+
 }
