@@ -14,8 +14,16 @@ public class Customer {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // YENİ EKLENDİ: Benzersiz, 4 haneli müşteri kodu
+    @Column(unique = true, nullable = false, length = 4)
+    private String customerCode;
+
     @Column(nullable = false)
     private String name;
+
+    // YENİ EKLENDİ: Müşteriyle ilgili kalıcı notlar
+    @Column(columnDefinition = "TEXT")
+    private String notes;
 
     @Column(nullable = false)
     private BigDecimal currentBalanceAmount = BigDecimal.ZERO;

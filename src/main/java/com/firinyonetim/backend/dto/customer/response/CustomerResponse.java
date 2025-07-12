@@ -11,7 +11,10 @@ import java.util.List;
 @Data
 public class CustomerResponse {
     private Long id;
+    private String customerCode; // Yeni alan
     private String name;
+    private String notes; // Yeni alan
+
     private BigDecimal currentBalanceAmount;
     private String phone;
     private String email;

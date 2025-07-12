@@ -15,7 +15,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -40,6 +42,10 @@ public class CustomerService {
 
     @Transactional
     public CustomerResponse createCustomer(CustomerCreateRequest request) {
+
+        if (customerRepository.existsByCustomerCode(request.getCustomerCode())) {
+            throw new IllegalStateException("Customer code " + request.getCustomerCode() + " is already in use.");
+        }
         // 1. Gelen DTO'yu ana Customer entity'sine çevir.
         // CustomerMapper, içindeki TaxInfoRequest ve AddressRequest'leri de çevirecektir.
         Customer customer = customerMapper.toCustomer(request);
@@ -89,21 +95,23 @@ public class CustomerService {
         return customerMapper.toCustomerResponse(customer);
     }
 
-    // Not: Müşteri güncelleme (updateCustomer) metodu da benzer bir mantıkla,
-    // gelen DTO'daki verileri mevcut entity'e aktararak yazılmalıdır.
+// ... CustomerService sınıfının içinde ...
+
     @Transactional
     public CustomerResponse updateCustomer(Long customerId, CustomerUpdateRequest request) {
         // 1. Güncellenecek müşteriyi veritabanından bul
         Customer customer = customerRepository.findById(customerId)
-                .orElseThrow(() -> new EntityNotFoundException("Customer not found with id: " + customerId));
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
 
         // 2. Müşterinin temel alanlarını güncelle
+        // customerCode'un güncellenmesine izin vermiyoruz.
         customer.setName(request.getName());
         customer.setPhone(request.getPhone());
         customer.setEmail(request.getEmail());
         customer.setActive(request.getIsActive());
+        customer.setNotes(request.getNotes()); // Notes alanını güncellemeyi ekleyelim.
 
-        // 3. Vergi Bilgisini Güncelle/Oluştur
+        // 3. Vergi Bilgisini Güvenli Bir Şekilde Güncelle/Oluştur
         if (request.getTaxInfo() != null) {
             TaxInfo taxInfo = customer.getTaxInfo();
             if (taxInfo == null) {
@@ -116,16 +124,23 @@ public class CustomerService {
             taxInfo.setTradeName(request.getTaxInfo().getTradeName());
             taxInfo.setTaxNumber(request.getTaxInfo().getTaxNumber());
             taxInfo.setTaxOffice(request.getTaxInfo().getTaxOffice());
-        } else {
-            // Eğer request'te taxInfo null gelirse, mevcut vergi bilgisini sil
+        } else if (customer.getTaxInfo() != null) {
+            // Eğer request'te taxInfo null gelirse ve müşterinin vergi bilgisi varsa, onu sil.
             customer.setTaxInfo(null);
         }
 
-        // 4. Adresleri Güncelle/Ekle/Sil (Karmaşık kısım)
+        // 4. Adresleri Güvenli Bir Şekilde Güncelle/Ekle/Sil
         // Önce mevcut adres listesini temizle. orphanRemoval=true sayesinde
         // listeden çıkarılan adresler veritabanından silinecek.
-        customer.getAddresses().clear();
-        if (request.getAddresses() != null) {
+        if (customer.getAddresses() != null) {
+            customer.getAddresses().clear();
+        } else {
+            // Eğer adres listesi null ise, boş bir liste oluştur.
+            customer.setAddresses(new ArrayList<>());
+        }
+
+        // Gelen yeni adresleri ekle (eğer varsa)
+        if (request.getAddresses() != null && !request.getAddresses().isEmpty()) {
             request.getAddresses().forEach(addressReq -> {
                 Address newAddress = new Address();
                 newAddress.setDetails(addressReq.getDetails());
@@ -164,4 +179,33 @@ public class CustomerService {
         specialPriceRepository.deleteByCustomerIdAndProductId(customerId, productId);
     }
 
+    @Transactional
+    public CustomerResponse updateCustomerFields(Long customerId, Map<String, Object> updates) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+
+        updates.forEach((key, value) -> {
+            switch (key) {
+                case "name":
+                    customer.setName((String) value);
+                    break;
+                case "phone":
+                    customer.setPhone((String) value);
+                    break;
+                case "email":
+                    customer.setEmail((String) value);
+                    break;
+                case "isActive":
+                    customer.setActive((Boolean) value);
+                    break;
+                case "notes":
+                    customer.setNotes((String) value);
+                    break;
+                // Do not allow customerCode updates
+            }
+        });
+
+        Customer updatedCustomer = customerRepository.save(customer);
+        return customerMapper.toCustomerResponse(updatedCustomer);
+    }
 }

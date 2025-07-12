@@ -11,6 +11,8 @@ import java.util.List;
 public class CustomerUpdateRequest {
     @NotBlank
     private String name;
+    private String notes; // Yeni alan
+
     private String phone;
     private String email;
     @NotNull

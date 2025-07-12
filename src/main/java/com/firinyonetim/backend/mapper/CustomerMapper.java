@@ -1,9 +1,11 @@
 package com.firinyonetim.backend.mapper;
 
 import com.firinyonetim.backend.dto.customer.request.CustomerCreateRequest;
+import com.firinyonetim.backend.dto.customer.request.CustomerUpdateRequest;
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
 import com.firinyonetim.backend.entity.Customer;
 import org.mapstruct.Mapper;
+import org.mapstruct.MappingTarget;
 
 // 'uses' attribute'ü sayesinde, Customer'ı map'lerken
 // içindeki adres listesini map'lemek için AddressMapper'ı kullanacağını biliyor.
@@ -19,4 +21,7 @@ public interface CustomerMapper {
     // İçindeki List<Address> listesini, AddressMapper'ı kullanarak
     // otomatik olarak List<AddressResponse> listesine çevirecek.
     CustomerResponse toCustomerResponse(Customer customer);
+
+    void updateCustomerFromDto(CustomerUpdateRequest request, @MappingTarget Customer customer);
+
 }

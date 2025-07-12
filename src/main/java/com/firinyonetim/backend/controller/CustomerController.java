@@ -15,6 +15,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/customers")
@@ -88,4 +89,12 @@ public class CustomerController {
     public ResponseEntity<List<RouteResponse>> getRoutesByCustomer(@PathVariable Long customerId) {
         return ResponseEntity.ok(routeService.getRoutesByCustomer(customerId));
     }
+
+    @PatchMapping("/{customerId}/update-fields")
+    public ResponseEntity<CustomerResponse> updateCustomerFields(
+            @PathVariable Long customerId,
+            @RequestBody Map<String, Object> updates) {
+        return ResponseEntity.ok(customerService.updateCustomerFields(customerId, updates));
+    }
+
 }
