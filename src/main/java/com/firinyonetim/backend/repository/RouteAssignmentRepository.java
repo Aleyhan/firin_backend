@@ -9,4 +9,9 @@ public interface RouteAssignmentRepository extends JpaRepository<RouteAssignment
     List<RouteAssignment> findByRouteId(Long routeId);
     @Transactional
     void deleteByCustomerId(Long customerId);
+
+    // YENİ METOT
+    @Transactional
+    void deleteByRouteId(Long routeId);
+
 }

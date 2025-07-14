@@ -15,8 +15,12 @@ import com.firinyonetim.backend.repository.RouteRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.firinyonetim.backend.dto.route.request.RouteUpdateRequest; // YENİ IMPORT
+import com.firinyonetim.backend.exception.ResourceNotFoundException; // YENİ IMPORT
+
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,9 +33,17 @@ public class RouteService {
     private final RouteMapper routeMapper;
     private final CustomerMapper customerMapper;
 
-    // --- Rota (Liste) CRUD İşlemleri ---
+    @Transactional // createRoute metodunun @Transactional olduğundan emin olun
     public RouteResponse createRoute(RouteCreateRequest request) {
+        // 1. Benzersizlik kontrolü
+        if (routeRepository.existsByRouteCode(request.getRouteCode())) {
+            throw new IllegalStateException("Rota kodu '" + request.getRouteCode() + "' zaten kullanılıyor.");
+        }
+
+        // 2. Mapper ile entity'e çevir
         Route route = routeMapper.toRoute(request);
+
+        // 3. Kaydet ve response'a çevirip döndür
         return routeMapper.toRouteResponse(routeRepository.save(route));
     }
 
@@ -86,6 +98,48 @@ public class RouteService {
     }
 
     @Transactional
+    public RouteResponse updateRoute(Long routeId, RouteUpdateRequest request) { // <<< DÜZELTİLDİ
+        Route route = routeRepository.findById(routeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
+
+        // 'request' artık doğru tipte (RouteUpdateRequest) olduğu için mapper sorunsuz çalışacak.
+        routeMapper.updateRouteFromDto(request, route);
+
+        Route savedRoute = routeRepository.save(route);
+        return routeMapper.toRouteResponse(savedRoute);
+    }
+
+    public RouteResponse getRouteById(Long routeId) {
+        Route route = routeRepository.findById(routeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
+        return routeMapper.toRouteResponse(route);
+    }
+
+    @Transactional
+    public void updateRouteCustomers(Long routeId, List<Long> customerIds) {
+        // 1. Rotanın var olup olmadığını kontrol et
+        Route route = routeRepository.findById(routeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
+
+        // 2. Bu rotanın mevcut tüm müşteri atamalarını sil
+        // Bunun için RouteAssignmentRepository'ye yeni bir metot ekleyeceğiz.
+        routeAssignmentRepository.deleteByRouteId(routeId);
+
+        // 3. Gelen listedeki yeni müşterileri rotaya ata
+        if (customerIds != null && !customerIds.isEmpty()) {
+            List<Customer> customers = customerRepository.findAllById(customerIds);
+            // Gelen ID'lerin hepsi geçerli mi diye kontrol edilebilir, şimdilik basit tutalım.
+
+            customers.forEach(customer -> {
+                RouteAssignment assignment = new RouteAssignment();
+                assignment.setRoute(route);
+                assignment.setCustomer(customer);
+                routeAssignmentRepository.save(assignment);
+            });
+        }
+    }
+
+    @Transactional
     public void updateCustomerRoutes(Long customerId, List<Long> routeIds) {
         Customer customer = customerRepository.findById(customerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
@@ -103,5 +157,14 @@ public class RouteService {
                 routeAssignmentRepository.save(assignment);
             });
         }
+    }
+
+    public Map<Long, Long> getCustomerCountsPerRoute() { // <<< İMZA DEĞİŞTİ
+        List<Route> routes = routeRepository.findAllWithCustomers();
+        return routes.stream()
+                .collect(Collectors.toMap(
+                        Route::getId, // <<< DEĞİŞİKLİK BURADA: Rota ID'sini anahtar yapıyor
+                        route -> (long) route.getAssignments().size()
+                ));
     }
 }

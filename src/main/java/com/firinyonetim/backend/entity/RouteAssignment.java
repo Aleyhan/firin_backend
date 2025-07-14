@@ -2,6 +2,8 @@ package com.firinyonetim.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 @Data
 @Entity
@@ -15,9 +17,13 @@ public class RouteAssignment {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "route_id")
+    @ToString.Exclude // YENİ ANOTASYON
+    @EqualsAndHashCode.Exclude // YENİ ANOTASYON
     private Route route;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id")
+    @ToString.Exclude // YENİ ANOTASYON
+    @EqualsAndHashCode.Exclude // YENİ ANOTASYON
     private Customer customer;
 }

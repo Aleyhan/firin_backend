@@ -2,6 +2,7 @@ package com.firinyonetim.backend.controller;
 
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
 import com.firinyonetim.backend.dto.route.request.RouteCreateRequest;
+import com.firinyonetim.backend.dto.route.request.RouteUpdateRequest;
 import com.firinyonetim.backend.dto.route.response.RouteResponse;
 import com.firinyonetim.backend.service.RouteService;
 import jakarta.validation.Valid;
@@ -38,10 +39,24 @@ public class RouteController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/{routeId}")
+    public ResponseEntity<RouteResponse> getRouteById(@PathVariable Long routeId) {
+        return ResponseEntity.ok(routeService.getRouteById(routeId));
+    }
+
+    @PutMapping("/{routeId}")
+    @PreAuthorize("hasRole('YONETICI')")
+    public ResponseEntity<RouteResponse> updateRoute(
+            @PathVariable Long routeId,
+            @Valid @RequestBody RouteUpdateRequest request) { // <<< BURANIN RouteUpdateRequest OLDUĞUNDAN EMİN OLUN
+        return ResponseEntity.ok(routeService.updateRoute(routeId, request));
+    }
+
     @GetMapping("/{routeId}/customers")
     public ResponseEntity<List<CustomerResponse>> getCustomersByRoute(@PathVariable Long routeId) {
         return ResponseEntity.ok(routeService.getCustomersByRoute(routeId));
     }
+
 
     @PostMapping("/{routeId}/customers")
     public ResponseEntity<Void> assignCustomerToRoute(@PathVariable Long routeId, @RequestBody Map<String, Long> payload) {
@@ -50,9 +65,25 @@ public class RouteController {
         return ResponseEntity.ok().build();
     }
 
+    @PutMapping("/{routeId}/customers")
+    @PreAuthorize("hasRole('YONETICI')")
+    public ResponseEntity<Void> updateRouteCustomers(
+            @PathVariable Long routeId,
+            @RequestBody List<Long> customerIds) {
+        routeService.updateRouteCustomers(routeId, customerIds);
+        return ResponseEntity.ok().build();
+    }
+
     @DeleteMapping("/{routeId}/customers/{customerId}")
     public ResponseEntity<Void> removeCustomerFromRoute(@PathVariable Long routeId, @PathVariable Long customerId) {
         routeService.removeCustomerFromRoute(routeId, customerId);
         return ResponseEntity.noContent().build();
     }
+
+    @GetMapping("/counts")
+    @PreAuthorize("hasRole('YONETICI')")
+    public ResponseEntity<Map<Long, Long>> getCustomerCountsPerRoute() { // <<< DÖNÜŞ TİPİ DEĞİŞTİ
+        return ResponseEntity.ok(routeService.getCustomerCountsPerRoute());
+    }
+
 }

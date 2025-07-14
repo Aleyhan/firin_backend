@@ -4,4 +4,7 @@ import lombok.Data;
 @Data public class RouteUpdateRequest {
     @NotBlank
     private String name;
+
+    private String description;
+
 }
