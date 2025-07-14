@@ -4,10 +4,12 @@ import com.firinyonetim.backend.dto.customer.request.CustomerCreateRequest;
 import com.firinyonetim.backend.dto.customer.request.CustomerUpdateRequest;
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
 import com.firinyonetim.backend.dto.special_price.request.SpecialPriceRequest;
+import com.firinyonetim.backend.dto.tax_info.request.TaxInfoRequest;
 import com.firinyonetim.backend.entity.*;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.mapper.CustomerMapper;
 import com.firinyonetim.backend.mapper.ProductMapper;
+import com.firinyonetim.backend.mapper.TaxInfoMapper;
 import com.firinyonetim.backend.repository.CustomerRepository;
 import com.firinyonetim.backend.repository.ProductRepository;
 import com.firinyonetim.backend.repository.SpecialProductPriceRepository;
@@ -31,6 +33,7 @@ public class CustomerService {
     private final CustomerMapper customerMapper;
     private final ProductMapper productMapper;
     private final TaxInfoRepository taxInfoRepository;
+    private final TaxInfoMapper taxInfoMapper;
 
     public List<CustomerResponse> getAllCustomers() {
         return customerRepository.findAll().stream()
@@ -286,5 +289,28 @@ public class CustomerService {
         Customer updatedCustomer = customerRepository.save(customer);
         return customerMapper.toCustomerResponse(updatedCustomer);
     }
+
+    @Transactional
+    public CustomerResponse createTaxInfoForCustomer(Long customerId, TaxInfoRequest taxInfoRequest) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+
+        if (customer.getTaxInfo() != null) {
+            throw new IllegalStateException("Customer already has tax info.");
+        }
+
+        if (taxInfoRepository.existsByTaxNumber(taxInfoRequest.getTaxNumber())) {
+            throw new IllegalStateException("Tax number '" + taxInfoRequest.getTaxNumber() + "' is already in use.");
+        }
+
+        TaxInfo taxInfo = taxInfoMapper.toTaxInfo(taxInfoRequest);
+        taxInfo.setCustomer(customer);
+        customer.setTaxInfo(taxInfo);
+
+        Customer updatedCustomer = customerRepository.save(customer);
+        return customerMapper.toCustomerResponse(updatedCustomer);
+    }
+
+
 
 }

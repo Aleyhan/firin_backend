@@ -5,6 +5,7 @@ import com.firinyonetim.backend.dto.customer.request.CustomerUpdateRequest;
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
 import com.firinyonetim.backend.dto.route.response.RouteResponse;
 import com.firinyonetim.backend.dto.special_price.request.SpecialPriceRequest;
+import com.firinyonetim.backend.dto.tax_info.request.TaxInfoRequest;
 import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
 import com.firinyonetim.backend.service.CustomerService;
 import com.firinyonetim.backend.service.RouteService;
@@ -14,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
 
@@ -35,6 +37,14 @@ public class CustomerController {
     @PostMapping
     public ResponseEntity<CustomerResponse> createCustomer(@RequestBody CustomerCreateRequest request) {
         return ResponseEntity.ok(customerService.createCustomer(request));
+    }
+
+    @PostMapping("/{customerId}/tax-info")
+    @PreAuthorize("hasRole('YONETICI')")
+    public ResponseEntity<CustomerResponse> createTaxInfoForCustomer(
+            @PathVariable Long customerId,
+            @Valid @RequestBody TaxInfoRequest taxInfoRequest) {
+        return ResponseEntity.ok(customerService.createTaxInfoForCustomer(customerId, taxInfoRequest));
     }
 
     @PostMapping("/{customerId}/special-prices")
