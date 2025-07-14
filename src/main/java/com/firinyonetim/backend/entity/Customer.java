@@ -32,8 +32,9 @@ public class Customer {
     private String email;
     private boolean isActive = true;
 
-    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Address> addresses = new ArrayList<>();
+    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "address_id", referencedColumnName = "id") // YENİ: Müşteri tablosuna adresin ID'sini ekliyoruz.
+    private Address address; // List<Address> yerine tek bir Address nesnesi
 
     @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<SpecialProductPrice> specialPrices = new ArrayList<>();

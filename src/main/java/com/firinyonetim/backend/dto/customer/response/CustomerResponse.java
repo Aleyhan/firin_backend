@@ -19,7 +19,7 @@ public class CustomerResponse {
     private String phone;
     private String email;
     private boolean isActive;
-    private List<AddressResponse> addresses;
+    private AddressResponse address; // YENİ
     private List<SpecialPriceResponse> specialPrices;
     private List<RouteResponse> routes; // Bu alanı eklediğinizi varsayıyorum
 

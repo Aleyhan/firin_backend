@@ -57,11 +57,6 @@ public class CustomerService {
         // CustomerMapper, içindeki TaxInfoRequest ve AddressRequest'leri de çevirecektir.
         Customer customer = customerMapper.toCustomer(request);
 
-        // 2. Çift yönlü ilişkileri manuel olarak kur.
-        // Adreslerin customer referansını set et.
-        if (customer.getAddresses() != null) {
-            customer.getAddresses().forEach(address -> address.setCustomer(customer));
-        }
 
         // Vergi bilgisinin customer referansını set et.
         if (customer.getTaxInfo() != null) {
@@ -139,23 +134,21 @@ public class CustomerService {
         // 4. Adresleri Güvenli Bir Şekilde Güncelle/Ekle/Sil
         // Önce mevcut adres listesini temizle. orphanRemoval=true sayesinde
         // listeden çıkarılan adresler veritabanından silinecek.
-        if (customer.getAddresses() != null) {
-            customer.getAddresses().clear();
+        // 4. ADRESİ GÜNCELLEME (YENİ YAKLAŞIM)
+        if (request.getAddress() != null) {
+            Address address = customer.getAddress();
+            if (address == null) {
+                // Müşterinin adresi yoksa, yeni bir tane oluştur.
+                address = new Address();
+                customer.setAddress(address);
+            }
+            // Alanları güncelle
+            address.setDetails(request.getAddress().getDetails());
+            address.setProvince(request.getAddress().getProvince());
+            address.setDistrict(request.getAddress().getDistrict());
         } else {
-            // Eğer adres listesi null ise, boş bir liste oluştur.
-            customer.setAddresses(new ArrayList<>());
-        }
-
-        // Gelen yeni adresleri ekle (eğer varsa)
-        if (request.getAddresses() != null && !request.getAddresses().isEmpty()) {
-            request.getAddresses().forEach(addressReq -> {
-                Address newAddress = new Address();
-                newAddress.setDetails(addressReq.getDetails());
-                newAddress.setProvince(addressReq.getProvince());
-                newAddress.setDistrict(addressReq.getDistrict());
-                newAddress.setCustomer(customer); // İlişkiyi kur
-                customer.getAddresses().add(newAddress); // Müşterinin listesine ekle
-            });
+            // Eğer request'te adres null gelirse, müşterinin mevcut adresini sil.
+            customer.setAddress(null);
         }
 
         // 5. Değişiklikleri kaydet. @Transactional sayesinde tüm değişiklikler tek seferde işlenir.

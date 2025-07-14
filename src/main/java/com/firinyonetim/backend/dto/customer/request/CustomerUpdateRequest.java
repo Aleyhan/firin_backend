@@ -19,7 +19,7 @@ public class CustomerUpdateRequest {
     private Boolean isActive;
 
     // Müşterinin güncel adres listesi
-    private List<AddressUpdateRequest> addresses;
+    private AddressUpdateRequest address; // YENİ
 
     // Müşterinin güncel vergi bilgisi
     private TaxInfoUpdateRequest taxInfo;

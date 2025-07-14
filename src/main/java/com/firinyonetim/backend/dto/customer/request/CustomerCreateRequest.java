@@ -25,7 +25,7 @@ public class CustomerCreateRequest {
     private String email;
 
     // Müşteriyle birlikte adreslerini de alıyoruz.
-    private List<AddressRequest> addresses;
+    private AddressRequest address; // YENİ
 
     private TaxInfoRequest taxInfo;
 }
