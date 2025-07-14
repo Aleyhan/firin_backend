@@ -11,6 +11,7 @@ import com.firinyonetim.backend.service.CustomerService;
 import com.firinyonetim.backend.service.RouteService;
 import com.firinyonetim.backend.service.TransactionService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
+import com.firinyonetim.backend.dto.address.request.AddressRequest;
 
 @RestController
 @RequestMapping("/api/customers")
@@ -115,5 +117,23 @@ public class CustomerController {
             @RequestBody Map<String, String> updates) {
         return ResponseEntity.ok(customerService.updateCustomerTaxInfo(customerId, updates));
     }
+
+    // YENİ ENDPOINT: Müşterinin adresini kısmi olarak günceller.
+    @PatchMapping("/{customerId}/address")
+    @PreAuthorize("hasRole('YONETICI')")
+    public ResponseEntity<CustomerResponse> updateCustomerAddress(
+            @PathVariable Long customerId,
+            @RequestBody Map<String, String> updates) {
+        return ResponseEntity.ok(customerService.updateCustomerAddress(customerId, updates));
+    }
+
+    @PostMapping("/{customerId}/address")
+    @PreAuthorize("hasRole('YONETICI')")
+    public ResponseEntity<CustomerResponse> createAddressForCustomer(
+            @PathVariable Long customerId,
+            @RequestBody @Valid AddressRequest addressRequest) {
+        return ResponseEntity.ok(customerService.createAddressForCustomer(customerId, addressRequest));
+    }
+
 
 }

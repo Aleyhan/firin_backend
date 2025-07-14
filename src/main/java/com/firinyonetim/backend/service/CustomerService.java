@@ -1,5 +1,6 @@
 package com.firinyonetim.backend.service;
 
+import com.firinyonetim.backend.dto.address.request.AddressRequest;
 import com.firinyonetim.backend.dto.customer.request.CustomerCreateRequest;
 import com.firinyonetim.backend.dto.customer.request.CustomerUpdateRequest;
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
@@ -7,6 +8,7 @@ import com.firinyonetim.backend.dto.special_price.request.SpecialPriceRequest;
 import com.firinyonetim.backend.dto.tax_info.request.TaxInfoRequest;
 import com.firinyonetim.backend.entity.*;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
+import com.firinyonetim.backend.mapper.AddressMapper;
 import com.firinyonetim.backend.mapper.CustomerMapper;
 import com.firinyonetim.backend.mapper.ProductMapper;
 import com.firinyonetim.backend.mapper.TaxInfoMapper;
@@ -34,6 +36,7 @@ public class CustomerService {
     private final ProductMapper productMapper;
     private final TaxInfoRepository taxInfoRepository;
     private final TaxInfoMapper taxInfoMapper;
+    private final AddressMapper addressMapper; // Yeni eklenen AddressMapper
 
     public List<CustomerResponse> getAllCustomers() {
         return customerRepository.findAll().stream()
@@ -284,6 +287,45 @@ public class CustomerService {
     }
 
     @Transactional
+    public CustomerResponse updateCustomerAddress(Long customerId, Map<String, String> updates) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+
+        Address address = customer.getAddress();
+        if (address == null) {
+            if (updates == null || updates.isEmpty()) {
+                return customerMapper.toCustomerResponse(customer);
+            }
+            address = new Address();
+            customer.setAddress(address);
+        }
+
+        final Address finalAddress = address;
+
+        updates.forEach((key, value) -> {
+            if (value != null && !value.trim().isEmpty()) {
+                switch (key) {
+                    case "details":
+                        finalAddress.setDetails(value);
+                        break;
+                    case "province":
+                        finalAddress.setProvince(value);
+                        break;
+                    case "district":
+                        finalAddress.setDistrict(value);
+                        break;
+                    default:
+                        // Bilinmeyen anahtarları yoksay
+                        break;
+                }
+            }
+        });
+
+        Customer updatedCustomer = customerRepository.save(customer);
+        return customerMapper.toCustomerResponse(updatedCustomer);
+    }
+
+    @Transactional
     public CustomerResponse createTaxInfoForCustomer(Long customerId, TaxInfoRequest taxInfoRequest) {
         Customer customer = customerRepository.findById(customerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
@@ -304,6 +346,22 @@ public class CustomerService {
         return customerMapper.toCustomerResponse(updatedCustomer);
     }
 
+    // src/main/java/com/firinyonetim/backend/service/CustomerService.java
 
+        @Transactional
+        public CustomerResponse createAddressForCustomer(Long customerId, AddressRequest addressRequest) {
+            Customer customer = customerRepository.findById(customerId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+
+            if (customer.getAddress() != null) {
+                throw new IllegalStateException("Customer already has an address.");
+            }
+
+            Address address = addressMapper.toAddress(addressRequest);
+            customer.setAddress(address);
+
+            Customer updatedCustomer = customerRepository.save(customer);
+            return customerMapper.toCustomerResponse(updatedCustomer);
+        }
 
 }
