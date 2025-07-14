@@ -27,6 +27,11 @@ public class Route {
     @Column(columnDefinition = "TEXT") // Açıklamanın uzun olabilmesi için TEXT tipini kullanmak iyi bir pratiktir.
     private String description;
 
+    // YENİ ALAN
+    @Column(nullable = false)
+    private boolean isActive = true; // Varsayılan olarak her yeni rota aktif olsun.
+
+
     // Bir rotanın hangi müşterileri içerdiğini görmek için
     // Bir rotanın hangi müşterileri içerdiğini görmek için
     @OneToMany(mappedBy = "route", cascade = CascadeType.ALL, orphanRemoval = true)

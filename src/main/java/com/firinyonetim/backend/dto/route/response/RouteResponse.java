@@ -7,4 +7,8 @@ import lombok.Data;
     private String name;
     private String description;
 
+    // YENİ ALAN
+    private boolean isActive;
+
+
 }

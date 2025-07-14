@@ -34,8 +34,8 @@ public class RouteController {
     }
 
     @DeleteMapping("/{routeId}")
-    public ResponseEntity<Void> deleteRoute(@PathVariable Long routeId) {
-        routeService.deleteRoute(routeId);
+    public ResponseEntity<Void> deleteRouteByStatus(@PathVariable Long routeId) {
+        routeService.deleteRouteByStatus(routeId);
         return ResponseEntity.noContent().build();
     }
 
@@ -85,5 +85,11 @@ public class RouteController {
     public ResponseEntity<Map<Long, Long>> getCustomerCountsPerRoute() { // <<< DÖNÜŞ TİPİ DEĞİŞTİ
         return ResponseEntity.ok(routeService.getCustomerCountsPerRoute());
     }
+
+    @PatchMapping("/{routeId}/toggle-status")
+        @PreAuthorize("hasRole('YONETICI')")
+        public ResponseEntity<RouteResponse> toggleRouteStatus(@PathVariable Long routeId) {
+            return ResponseEntity.ok(routeService.toggleRouteStatus(routeId));
+        }
 
 }

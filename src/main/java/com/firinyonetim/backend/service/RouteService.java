@@ -33,6 +33,7 @@ public class RouteService {
     private final RouteMapper routeMapper;
     private final CustomerMapper customerMapper;
 
+
     @Transactional // createRoute metodunun @Transactional olduğundan emin olun
     public RouteResponse createRoute(RouteCreateRequest request) {
         // 1. Benzersizlik kontrolü
@@ -53,11 +54,15 @@ public class RouteService {
                 .collect(Collectors.toList());
     }
 
-    public void deleteRoute(Long routeId) {
-        if (!routeRepository.existsById(routeId)) {
-            throw new ResourceNotFoundException("Route not found with id: " + routeId);
-        }
-        routeRepository.deleteById(routeId);
+    // 2. Rota silme metodunu GÜNCELLE (Artık pasif hale getirecek)
+    @Transactional
+    public void deleteRouteByStatus(Long routeId) {
+        Route route = routeRepository.findById(routeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
+
+        // Gerçek silme yerine, rotayı pasif hale getiriyoruz.
+        route.setActive(false);
+        routeRepository.save(route);
     }
 
     // --- Atama İşlemleri ---
@@ -167,4 +172,15 @@ public class RouteService {
                         route -> (long) route.getAssignments().size()
                 ));
     }
+
+    // ... diğer metotlar
+
+    @Transactional
+        public RouteResponse toggleRouteStatus(Long routeId) {
+            Route route = routeRepository.findById(routeId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
+            route.setActive(!route.isActive()); // Mevcut durumu tersine çevir
+            Route updatedRoute = routeRepository.save(route);
+            return routeMapper.toRouteResponse(updatedRoute); // Mevcut mapper'ı kullanarak dönüşüm yap
+        }
 }
