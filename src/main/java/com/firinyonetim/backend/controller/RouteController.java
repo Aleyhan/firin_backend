@@ -65,6 +65,12 @@ public class RouteController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/{routeId}/customers/batch-assign")
+    public ResponseEntity<Void> assignCustomersToRoute(@PathVariable Long routeId, @RequestBody List<Long> customerIds) {
+        routeService.assignCustomersToRoute(routeId, customerIds);
+        return ResponseEntity.ok().build();
+    }
+
     @PutMapping("/{routeId}/customers")
     @PreAuthorize("hasRole('YONETICI')")
     public ResponseEntity<Void> updateRouteCustomers(
@@ -91,5 +97,12 @@ public class RouteController {
         public ResponseEntity<RouteResponse> toggleRouteStatus(@PathVariable Long routeId) {
             return ResponseEntity.ok(routeService.toggleRouteStatus(routeId));
         }
+
+    @GetMapping("/{routeId}/total-debt")
+    @PreAuthorize("hasRole('YONETICI')")
+    public ResponseEntity<Double> getTotalDebtForRoute(@PathVariable Long routeId) {
+        double totalDebt = routeService.getTotalDebtForRoute(routeId);
+        return ResponseEntity.ok(totalDebt);
+    }
 
 }

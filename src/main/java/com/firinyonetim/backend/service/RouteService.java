@@ -82,6 +82,46 @@ public class RouteService {
     }
 
     @Transactional
+    public void assignCustomersToRoute(Long routeId, List<Long> customerIds) {
+        Route route = routeRepository.findById(routeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
+
+        // Get all current assignments for the route
+        List<RouteAssignment> existingAssignments = routeAssignmentRepository.findByRouteId(routeId);
+        Set<Long> existingCustomerIds = existingAssignments.stream()
+                .map(assignment -> assignment.getCustomer().getId())
+                .collect(Collectors.toSet());
+
+        Set<Long> desiredCustomerIds = new java.util.HashSet<>(customerIds);
+
+        // --- Step 1: Identify and remove customers no longer on the route ---
+        List<RouteAssignment> assignmentsToRemove = existingAssignments.stream()
+                .filter(assignment -> !desiredCustomerIds.contains(assignment.getCustomer().getId()))
+                .collect(Collectors.toList());
+
+        if (!assignmentsToRemove.isEmpty()) {
+            routeAssignmentRepository.deleteAll(assignmentsToRemove);
+        }
+
+        // --- Step 2: Identify and add new customers ---
+        List<Long> newCustomerIds = desiredCustomerIds.stream()
+                .filter(id -> !existingCustomerIds.contains(id))
+                .collect(Collectors.toList());
+
+        if (!newCustomerIds.isEmpty()) {
+            List<Customer> customersToAdd = customerRepository.findAllById(newCustomerIds);
+            List<RouteAssignment> newAssignments = customersToAdd.stream().map(customer -> {
+                RouteAssignment assignment = new RouteAssignment();
+                assignment.setRoute(route);
+                assignment.setCustomer(customer);
+                return assignment;
+            }).collect(Collectors.toList());
+
+            routeAssignmentRepository.saveAll(newAssignments);
+        }
+    }
+
+    @Transactional
     public void removeCustomerFromRoute(Long routeId, Long customerId) {
         // Bu metot daha verimli hale getirilebilir, şimdilik basit tutuyoruz.
         routeAssignmentRepository.findByRouteId(routeId).stream()
@@ -225,13 +265,25 @@ public class RouteService {
     // ... diğer metotlar
 
     @Transactional
-        public RouteResponse toggleRouteStatus(Long routeId) {
-            Route route = routeRepository.findById(routeId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
-            route.setActive(!route.isActive()); // Mevcut durumu tersine çevir
-            Route updatedRoute = routeRepository.save(route);
-            return routeMapper.toRouteResponse(updatedRoute); // Mevcut mapper'ı kullanarak dönüşüm yap
-        }
+    public RouteResponse toggleRouteStatus(Long routeId) {
+        Route route = routeRepository.findById(routeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
+        route.setActive(!route.isActive()); // Mevcut durumu tersine çevir
+        Route updatedRoute = routeRepository.save(route);
+        return routeMapper.toRouteResponse(updatedRoute); // Mevcut mapper'ı kullanarak dönüşüm yap
+    }
+
+    @Transactional(readOnly = true)
+    public double getTotalDebtForRoute(Long routeId) {
+        Route route = routeRepository.findById(routeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
+
+        return route.getAssignments().stream()
+                .map(RouteAssignment::getCustomer)
+                .map(Customer::getCurrentBalanceAmount)
+                .mapToDouble(java.math.BigDecimal::doubleValue)
+                .sum();
+    }
 
 
 }
