@@ -21,7 +21,9 @@ import com.firinyonetim.backend.exception.ResourceNotFoundException; // YENİ IM
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -126,21 +128,34 @@ public class RouteService {
         Route route = routeRepository.findById(routeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
 
-        // 2. Bu rotanın mevcut tüm müşteri atamalarını sil
-        // Bunun için RouteAssignmentRepository'ye yeni bir metot ekleyeceğiz.
-        routeAssignmentRepository.deleteByRouteId(routeId);
+        // 2. Bu rotaya zaten atanmış olan müşteri ID'lerinin bir set'ini oluştur.
+        // Bu, veritabanına tekrar tekrar "bu atama var mı?" diye sormamızı engeller.
+        List<Long> existingCustomerIds = routeAssignmentRepository.findByRouteId(routeId).stream()
+                .map(assignment -> assignment.getCustomer().getId())
+                .collect(Collectors.toList());
 
-        // 3. Gelen listedeki yeni müşterileri rotaya ata
-        if (customerIds != null && !customerIds.isEmpty()) {
-            List<Customer> customers = customerRepository.findAllById(customerIds);
-            // Gelen ID'lerin hepsi geçerli mi diye kontrol edilebilir, şimdilik basit tutalım.
+        // 3. Gelen listeden sadece yeni (henüz atanmamış) müşteri ID'lerini filtrele.
+        List<Long> newCustomerIds = customerIds.stream()
+                .filter(id -> !existingCustomerIds.contains(id))
+                .collect(Collectors.toList());
 
-            customers.forEach(customer -> {
+        List<Long> mergedCustomerIds = Stream.concat(existingCustomerIds.stream(), newCustomerIds.stream())
+                .distinct() // Remove duplicates if any
+                .collect(Collectors.toList());
+
+        // 4. Yeni müşteriler varsa, onları bul ve rotaya ata.
+        if (!mergedCustomerIds.isEmpty()) {
+            List<Customer> customersToAdd = customerRepository.findAllById(mergedCustomerIds);
+
+            List<RouteAssignment> newAssignments = customersToAdd.stream().map(customer -> {
                 RouteAssignment assignment = new RouteAssignment();
                 assignment.setRoute(route);
                 assignment.setCustomer(customer);
-                routeAssignmentRepository.save(assignment);
-            });
+                return assignment;
+            }).collect(Collectors.toList());
+
+            // Performans için toplu kaydetme
+            routeAssignmentRepository.saveAll(newAssignments);
         }
     }
 
@@ -164,6 +179,40 @@ public class RouteService {
         }
     }
 
+    // YENİ METOT
+    @Transactional
+    public void addCustomersToRoute(Long routeId, List<Long> customerIds) {
+        // 1. Rotayı ve ilişkili atamalarını getir.
+        // findById kullanmak burada daha verimli olabilir, çünkü tüm müşteri nesnelerine ihtiyacımız yok.
+        Route route = routeRepository.findById(routeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
+
+        // 2. Bu rotaya zaten atanmış olan müşteri ID'lerinin bir set'ini oluştur.
+        // Bu, veritabanına tekrar tekrar "bu atama var mı?" diye sormamızı engeller.
+        Set<Long> existingCustomerIds = route.getAssignments().stream()
+                .map(assignment -> assignment.getCustomer().getId())
+                .collect(Collectors.toSet());
+
+        // 3. Gelen listedeki müşterileri bul.
+        List<Customer> customersToAdd = customerRepository.findAllById(customerIds);
+        if (customersToAdd.size() != customerIds.size()) {
+            // Bu, gelen ID'lerden bazılarının geçersiz olduğunu gösterir.
+            // Hata fırlatabilir veya görmezden gelebiliriz. Şimdilik devam edelim.
+            System.out.println("Warning: Some customer IDs were not found and will be ignored.");
+        }
+
+        // 4. Her bir müşteri için, eğer zaten atanmamışsa, yeni bir atama oluştur.
+        for (Customer customer : customersToAdd) {
+            if (!existingCustomerIds.contains(customer.getId())) {
+                RouteAssignment newAssignment = new RouteAssignment();
+                newAssignment.setRoute(route);
+                newAssignment.setCustomer(customer);
+                routeAssignmentRepository.save(newAssignment);
+                // Performans için saveAll da kullanılabilir, ancak bu daha net.
+            }
+        }
+    }
+
     public Map<Long, Long> getCustomerCountsPerRoute() { // <<< İMZA DEĞİŞTİ
         List<Route> routes = routeRepository.findAllWithCustomers();
         return routes.stream()
@@ -183,4 +232,6 @@ public class RouteService {
             Route updatedRoute = routeRepository.save(route);
             return routeMapper.toRouteResponse(updatedRoute); // Mevcut mapper'ı kullanarak dönüşüm yap
         }
+
+
 }
