@@ -145,5 +145,13 @@ public class CustomerController {
         return ResponseEntity.ok(customerService.createAddressForCustomer(customerId, addressRequest));
     }
 
+    @PostMapping("/{customerId}/routes")
+    @PreAuthorize("hasRole('YONETICI')")
+    public ResponseEntity<Void> assignRoutesToCustomer(
+            @PathVariable Long customerId,
+            @RequestBody List<Long> routeIds) {
+        customerService.assignRoutesToCustomer(customerId, routeIds);
+        return ResponseEntity.ok().build();
+    }
 
 }

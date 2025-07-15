@@ -15,6 +15,8 @@ import com.firinyonetim.backend.mapper.ProductMapper;
 import com.firinyonetim.backend.mapper.TaxInfoMapper;
 import com.firinyonetim.backend.repository.CustomerRepository;
 import com.firinyonetim.backend.repository.ProductRepository;
+import com.firinyonetim.backend.repository.RouteRepository;
+import com.firinyonetim.backend.repository.RouteAssignmentRepository;
 import com.firinyonetim.backend.repository.SpecialProductPriceRepository;
 import com.firinyonetim.backend.repository.TaxInfoRepository;
 import com.firinyonetim.backend.repository.TransactionPaymentRepository;
@@ -43,6 +45,8 @@ public class CustomerService {
     private final TaxInfoMapper taxInfoMapper;
     private final AddressMapper addressMapper; // Yeni eklenen AddressMapper
     private final TransactionPaymentRepository transactionPaymentRepository;
+    private final RouteRepository routeRepository;
+    private final RouteAssignmentRepository routeAssignmentRepository;
 
 
     public List<CustomerResponse> getAllCustomers() {
@@ -201,45 +205,45 @@ public class CustomerService {
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
 
         updates.forEach((key, value) -> {
-            switch (key) {
-                case "name":
-                    customer.setName((String) value);
-                    break;
-                case "phone":
-                    customer.setPhone((String) value);
-                    break;
-                case "email":
-                    customer.setEmail((String) value);
-                    break;
-                case "isActive":
-                    customer.setActive((Boolean) value);
-                    break;
-                case "notes":
-                    customer.setNotes((String) value);
-                    break;
-                case "customerCode":
-                    if (value == null || !(value instanceof String)) {
-                        throw new IllegalArgumentException("Müşteri kodu metin formatında olmalıdır.");
-                    }
-                    String newCode = (String) value;
+                    switch (key) {
+                        case "name":
+                            customer.setName((String) value);
+                            break;
+                        case "phone":
+                            customer.setPhone((String) value);
+                            break;
+                        case "email":
+                            customer.setEmail((String) value);
+                            break;
+                        case "isActive":
+                            customer.setActive((Boolean) value);
+                            break;
+                        case "notes":
+                            customer.setNotes((String) value);
+                            break;
+                        case "customerCode":
+                            if (value == null || !(value instanceof String)) {
+                                throw new IllegalArgumentException("Müşteri kodu metin formatında olmalıdır.");
+                            }
+                            String newCode = (String) value;
 
-                    // 1. Uzunluk Kontrolü
-                    if (newCode.length() != 4) {
-                        throw new IllegalArgumentException("Müşteri kodu tam olarak 4 haneli olmalıdır.");
-                    }
+                            // 1. Uzunluk Kontrolü
+                            if (newCode.length() != 4) {
+                                throw new IllegalArgumentException("Müşteri kodu tam olarak 4 haneli olmalıdır.");
+                            }
 
-                    // 2. Benzersizlik (Unique) Kontrolü
-                    // Yeni kodun, mevcut müşteri dışındaki başka bir müşteriye ait olup olmadığını kontrol et
-                    if (customerRepository.existsByCustomerCodeAndIdNot(newCode, customer.getId())) {
-                        throw new IllegalStateException("Müşteri kodu '" + newCode + "' zaten başka bir müşteri tarafından kullanılıyor.");
-                    }
+                            // 2. Benzersizlik (Unique) Kontrolü
+                            // Yeni kodun, mevcut müşteri dışındaki başka bir müşteriye ait olup olmadığını kontrol et
+                            if (customerRepository.existsByCustomerCodeAndIdNot(newCode, customer.getId())) {
+                                throw new IllegalStateException("Müşteri kodu '" + newCode + "' zaten başka bir müşteri tarafından kullanılıyor.");
+                            }
 
-                    // Validasyonlar başarılıysa, kodu güncelle
-                    customer.setCustomerCode(newCode);
-                    break;
-                // YENİ EKLENEN BLOK SONU
-            }
-        }
+                            // Validasyonlar başarılıysa, kodu güncelle
+                            customer.setCustomerCode(newCode);
+                            break;
+                        // YENİ EKLENEN BLOK SONU
+                    }
+                }
         );
 
         Customer updatedCustomer = customerRepository.save(customer);
@@ -361,20 +365,40 @@ public class CustomerService {
 
     // src/main/java/com/firinyonetim/backend/service/CustomerService.java
 
-        @Transactional
-        public CustomerResponse createAddressForCustomer(Long customerId, AddressRequest addressRequest) {
-            Customer customer = customerRepository.findById(customerId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+    @Transactional
+    public CustomerResponse createAddressForCustomer(Long customerId, AddressRequest addressRequest) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
 
-            if (customer.getAddress() != null) {
-                throw new IllegalStateException("Customer already has an address.");
-            }
-
-            Address address = addressMapper.toAddress(addressRequest);
-            customer.setAddress(address);
-
-            Customer updatedCustomer = customerRepository.save(customer);
-            return customerMapper.toCustomerResponse(updatedCustomer);
+        if (customer.getAddress() != null) {
+            throw new IllegalStateException("Customer already has an address.");
         }
 
+        Address address = addressMapper.toAddress(addressRequest);
+        customer.setAddress(address);
+
+        Customer updatedCustomer = customerRepository.save(customer);
+        return customerMapper.toCustomerResponse(updatedCustomer);
+    }
+
+    @Transactional
+    public void assignRoutesToCustomer(Long customerId, List<Long> routeIds) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+        for (Long routeId : routeIds) {
+            Route route = routeRepository.findById(routeId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
+            // Check if assignment already exists to avoid duplicates
+            boolean exists = routeAssignmentRepository.findByCustomerId(customerId).stream()
+                    .anyMatch(ra -> ra.getRoute().getId().equals(routeId));
+            if (!exists) {
+                RouteAssignment assignment = new RouteAssignment();
+                assignment.setCustomer(customer);
+                assignment.setRoute(route);
+                routeAssignmentRepository.save(assignment);
+            }
+        }
+    }
 }
+
+
