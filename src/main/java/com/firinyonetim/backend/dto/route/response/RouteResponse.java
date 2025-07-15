@@ -10,5 +10,8 @@ import lombok.Data;
     // YENİ ALAN
     private boolean isActive;
 
+    // PLAKA ALANI (opsiyonel)
+    private String plaka;
+
 
 }

@@ -31,6 +31,10 @@ public class Route {
     @Column(nullable = false)
     private boolean isActive = true; // Varsayılan olarak her yeni rota aktif olsun.
 
+    // PLAKA ALANI (opsiyonel)
+    @Column(nullable = true, length = 20)
+    private String plaka;
+
 
     // Bir rotanın hangi müşterileri içerdiğini görmek için
     // Bir rotanın hangi müşterileri içerdiğini görmek için

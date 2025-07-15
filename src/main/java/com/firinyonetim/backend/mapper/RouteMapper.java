@@ -9,6 +9,7 @@ import org.mapstruct.MappingTarget;
 
 @Mapper(componentModel = "spring")
 public interface RouteMapper {
+    @Mapping(source = "plaka", target = "plaka")
     Route toRoute(RouteCreateRequest request);
     RouteResponse toRouteResponse(Route route);
 
