@@ -3,6 +3,7 @@ package com.firinyonetim.backend.controller;
 import com.firinyonetim.backend.dto.customer.request.CustomerCreateRequest;
 import com.firinyonetim.backend.dto.customer.request.CustomerUpdateRequest;
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
+import com.firinyonetim.backend.dto.customer.response.LastPaymentDateResponse;
 import com.firinyonetim.backend.dto.route.response.RouteResponse;
 import com.firinyonetim.backend.dto.special_price.request.SpecialPriceRequest;
 import com.firinyonetim.backend.dto.tax_info.request.TaxInfoRequest;
@@ -19,7 +20,9 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import com.firinyonetim.backend.dto.address.request.AddressRequest;
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/customers")
@@ -96,6 +99,13 @@ public class CustomerController {
         List<TransactionResponse> transactions = transactionService.getTransactionsByCustomerId(customerId);
         return ResponseEntity.ok(transactions);
     }
+
+    @GetMapping("/{customerId}/last-payment-date")
+    public ResponseEntity<LastPaymentDateResponse> getLastPaymentDate(@PathVariable Long customerId) {
+        LastPaymentDateResponse response = customerService.getLastPaymentDate(customerId);
+        return ResponseEntity.ok(response);
+    }
+
     // controller/CustomerController.java
     @GetMapping("/{customerId}/routes")
     public ResponseEntity<List<RouteResponse>> getRoutesByCustomer(@PathVariable Long customerId) {

@@ -4,6 +4,7 @@ import com.firinyonetim.backend.dto.address.request.AddressRequest;
 import com.firinyonetim.backend.dto.customer.request.CustomerCreateRequest;
 import com.firinyonetim.backend.dto.customer.request.CustomerUpdateRequest;
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
+import com.firinyonetim.backend.dto.customer.response.LastPaymentDateResponse;
 import com.firinyonetim.backend.dto.special_price.request.SpecialPriceRequest;
 import com.firinyonetim.backend.dto.tax_info.request.TaxInfoRequest;
 import com.firinyonetim.backend.entity.*;
@@ -16,14 +17,18 @@ import com.firinyonetim.backend.repository.CustomerRepository;
 import com.firinyonetim.backend.repository.ProductRepository;
 import com.firinyonetim.backend.repository.SpecialProductPriceRepository;
 import com.firinyonetim.backend.repository.TaxInfoRepository;
+import com.firinyonetim.backend.repository.TransactionPaymentRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -37,6 +42,8 @@ public class CustomerService {
     private final TaxInfoRepository taxInfoRepository;
     private final TaxInfoMapper taxInfoMapper;
     private final AddressMapper addressMapper; // Yeni eklenen AddressMapper
+    private final TransactionPaymentRepository transactionPaymentRepository;
+
 
     public List<CustomerResponse> getAllCustomers() {
         return customerRepository.findAll().stream()
@@ -71,6 +78,12 @@ public class CustomerService {
 
         // 4. Kaydedilen entity'i response DTO'suna çevirip döndür.
         return customerMapper.toCustomerResponse(savedCustomer);
+    }
+
+    public LastPaymentDateResponse getLastPaymentDate(Long customerId) {
+        return transactionPaymentRepository.findLastPaymentDateByCustomerId(customerId)
+                .map(dateTime -> new LastPaymentDateResponse(true, dateTime.toLocalDate()))
+                .orElse(new LastPaymentDateResponse(false, null));
     }
 
     @Transactional
