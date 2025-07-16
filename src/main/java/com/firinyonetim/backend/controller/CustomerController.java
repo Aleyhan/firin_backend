@@ -154,4 +154,14 @@ public class CustomerController {
         return ResponseEntity.ok().build();
     }
 
+    @PatchMapping("/{customerId}/workdays")
+    @PreAuthorize("hasRole('YONETICI')")
+    public ResponseEntity<CustomerResponse> updateCustomerWorkdays(
+            @PathVariable Long customerId,
+            @RequestBody List<String> workdays) {
+        CustomerResponse response = customerService.updateCustomerWorkdays(customerId, workdays);
+        return ResponseEntity.ok(response);
+    }
+
 }
+

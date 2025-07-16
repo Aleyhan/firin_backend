@@ -2,10 +2,12 @@ package com.firinyonetim.backend.dto.customer.request;
 
 import com.firinyonetim.backend.dto.address.request.AddressRequest;
 import com.firinyonetim.backend.dto.tax_info.request.TaxInfoRequest;
+import com.firinyonetim.backend.entity.DayOfWeek;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 import java.util.List;
+import java.util.Set;
 
 @Data
 public class CustomerCreateRequest {
@@ -28,4 +30,6 @@ public class CustomerCreateRequest {
     private AddressRequest address; // YENİ
 
     private TaxInfoRequest taxInfo;
+
+    private Set<DayOfWeek> workingDays;
 }

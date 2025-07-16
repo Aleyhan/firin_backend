@@ -25,12 +25,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -71,8 +69,25 @@ public class CustomerService {
         // CustomerMapper, içindeki TaxInfoRequest ve AddressRequest'leri de çevirecektir.
         Customer customer = customerMapper.toCustomer(request);
 
+// --- DEBUG İÇİN BU SATIRI EKLEYİN ---
+        System.out.println("Request DTO workingDays: " + request.getWorkingDays());
+        System.out.println("Mapped Entity workingDays: " + customer.getWorkingDays());
+        // --- DEBUG SONU ---
 
         // Vergi bilgisinin customer referansını set et.
+        if (customer.getTaxInfo() != null) {
+            customer.getTaxInfo().setCustomer(customer);
+        }
+
+        // --- DÜZELTME BURADA ---
+        // workingDays koleksiyonunu manuel olarak DTO'dan alıp entity'e set ediyoruz.
+        // Bu, mapper'ın eksik bıraktığı işi tamamlar.
+        if (request.getWorkingDays() != null) {
+            customer.setWorkingDays(new HashSet<>(request.getWorkingDays()));
+        }
+        // --- DÜZELTME SONU ---
+        System.out.println("Before Save - Entity workingDays: " + customer.getWorkingDays());
+
         if (customer.getTaxInfo() != null) {
             customer.getTaxInfo().setCustomer(customer);
         }
@@ -80,8 +95,14 @@ public class CustomerService {
         // 3. Müşteriyi kaydet. Cascade ayarları sayesinde ilişkili tüm varlıklar da kaydedilecek.
         Customer savedCustomer = customerRepository.save(customer);
 
-        // 4. Kaydedilen entity'i response DTO'suna çevirip döndür.
-        return customerMapper.toCustomerResponse(savedCustomer);
+        System.out.println("After Save - Saved Entity workingDays: " + savedCustomer.getWorkingDays());
+
+        CustomerResponse response = customerMapper.toCustomerResponse(savedCustomer);
+
+        // --- DEBUG 3 ---
+        System.out.println("After Mapping to Response - Response DTO workingDays: " + response.getWorkingDays());
+
+        return response;
     }
 
     public LastPaymentDateResponse getLastPaymentDate(Long customerId) {
@@ -169,6 +190,12 @@ public class CustomerService {
         } else {
             // Eğer request'te adres null gelirse, müşterinin mevcut adresini sil.
             customer.setAddress(null);
+        }
+
+        if (request.getWorkingDays() != null) {
+            // Manuel olarak DTO'dan gelen set'i atıyoruz.
+            // Bu, 'clear' ve 'addAll' yapmaktan daha güvenilir olabilir.
+            customer.setWorkingDays(new HashSet<>(request.getWorkingDays()));
         }
 
         // 5. Değişiklikleri kaydet. @Transactional sayesinde tüm değişiklikler tek seferde işlenir.
@@ -399,6 +426,23 @@ public class CustomerService {
             }
         }
     }
+
+    @Transactional
+    public CustomerResponse updateCustomerWorkdays(Long customerId, List<String> workdays) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+        Set<com.firinyonetim.backend.entity.DayOfWeek> days = new HashSet<>();
+        if (workdays != null) {
+            for (String day : workdays) {
+                try {
+                    days.add(com.firinyonetim.backend.entity.DayOfWeek.valueOf(day.toUpperCase()));
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("Invalid day: " + day);
+                }
+            }
+        }
+        customer.setWorkingDays(days);
+        Customer updatedCustomer = customerRepository.save(customer);
+        return customerMapper.toCustomerResponse(updatedCustomer);
+    }
 }
-
-

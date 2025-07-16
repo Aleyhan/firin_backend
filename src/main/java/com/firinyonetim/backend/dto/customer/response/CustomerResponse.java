@@ -4,9 +4,11 @@ import com.firinyonetim.backend.dto.address.response.AddressResponse;
 import com.firinyonetim.backend.dto.route.response.RouteResponse;
 import com.firinyonetim.backend.dto.special_price.response.SpecialPriceResponse;
 import com.firinyonetim.backend.dto.tax_info.response.TaxInfoResponse;
+import com.firinyonetim.backend.entity.DayOfWeek;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 
 @Data
 public class CustomerResponse {
@@ -24,4 +26,6 @@ public class CustomerResponse {
     private List<RouteResponse> routes; // Bu alanı eklediğinizi varsayıyorum
 
     private TaxInfoResponse taxInfo;
+
+    private Set<DayOfWeek> workingDays;
 }

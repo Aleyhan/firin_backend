@@ -5,6 +5,7 @@ import com.firinyonetim.backend.dto.customer.request.CustomerUpdateRequest;
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
 import com.firinyonetim.backend.entity.Customer;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 
 // 'uses' attribute'ü sayesinde, Customer'ı map'lerken
@@ -20,6 +21,8 @@ public interface CustomerMapper {
     // Customer'dan CustomerResponse'a dönüşüm.
     // İçindeki List<Address> listesini, AddressMapper'ı kullanarak
     // otomatik olarak List<AddressResponse> listesine çevirecek.
+    @Mapping(source = "workingDays", target = "workingDays")
+
     CustomerResponse toCustomerResponse(Customer customer);
 
     void updateCustomerFromDto(CustomerUpdateRequest request, @MappingTarget Customer customer);
