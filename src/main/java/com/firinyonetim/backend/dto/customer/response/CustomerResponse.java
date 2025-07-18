@@ -26,4 +26,5 @@ public class CustomerResponse {
     private TaxInfoResponse taxInfo;
 
     private Set<DayOfWeek> workingDays;
+    private Set<DayOfWeek> irsaliyeGunleri;
 }

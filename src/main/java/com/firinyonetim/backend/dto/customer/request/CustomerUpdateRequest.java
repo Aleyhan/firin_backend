@@ -27,4 +27,5 @@ public class CustomerUpdateRequest {
     private TaxInfoUpdateRequest taxInfo;
 
     private Set<DayOfWeek> workingDays;
+    private Set<DayOfWeek> irsaliyeGunleri;
 }

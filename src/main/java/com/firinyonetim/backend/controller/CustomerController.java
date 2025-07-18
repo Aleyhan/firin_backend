@@ -149,6 +149,15 @@ public class CustomerController {
         return ResponseEntity.ok(response);
     }
 
+    @PatchMapping("/{customerId}/irsaliye-gunleri")
+    @PreAuthorize("hasRole('YONETICI')")
+    public ResponseEntity<CustomerResponse> updateCustomerIrsaliyeGunleri(
+            @PathVariable Long customerId,
+            @RequestBody List<String> irsaliyeGunleri) {
+        CustomerResponse response = customerService.updateCustomerIrsaliyeGunleri(customerId, irsaliyeGunleri);
+        return ResponseEntity.ok(response);
+    }
+
     // CustomerController.java içinde...
     @PutMapping("/{customerId}/products") // PUT, çünkü bu işlem "oluştur veya güncelle" (upsert) mantığında.
     @PreAuthorize("hasRole('YONETICI')")
@@ -177,4 +186,3 @@ public class CustomerController {
     }
 
 }
-

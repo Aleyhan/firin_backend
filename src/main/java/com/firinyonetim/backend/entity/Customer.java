@@ -58,6 +58,12 @@ public class Customer {
     @Column(name = "day_of_week", nullable = false)
     private Set<DayOfWeek> workingDays = new HashSet<>();
 
+    @ElementCollection(targetClass = DayOfWeek.class, fetch = FetchType.EAGER)
+    @CollectionTable(name = "customer_irsaliye_gunleri", joinColumns = @JoinColumn(name = "customer_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "day_of_week", nullable = false)
+    private Set<DayOfWeek> irsaliyeGunleri = new HashSet<>();
+
     // Customer.java sınıfının içinde...
     @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude

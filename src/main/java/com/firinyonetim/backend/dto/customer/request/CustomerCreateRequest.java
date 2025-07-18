@@ -32,4 +32,5 @@ public class CustomerCreateRequest {
     private TaxInfoRequest taxInfo;
 
     private Set<DayOfWeek> workingDays;
+    private Set<DayOfWeek> irsaliyeGunleri;
 }

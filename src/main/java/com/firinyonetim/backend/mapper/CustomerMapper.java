@@ -16,15 +16,18 @@ public interface CustomerMapper {
     // CustomerCreateRequest'ten Customer'a dönüşüm.
     // İçindeki List<AddressRequest> listesini, AddressMapper'ı kullanarak
     // otomatik olarak List<Address> listesine çevirecek.
-    Customer toCustomer(CustomerCreateRequest request);
 
     // Customer'dan CustomerResponse'a dönüşüm.
     // İçindeki List<Address> listesini, AddressMapper'ı kullanarak
     // otomatik olarak List<AddressResponse> listesine çevirecek.
     @Mapping(source = "workingDays", target = "workingDays")
-
+    @Mapping(source = "irsaliyeGunleri", target = "irsaliyeGunleri")
     CustomerResponse toCustomerResponse(Customer customer);
 
+    @Mapping(source = "irsaliyeGunleri", target = "irsaliyeGunleri")
+    Customer toCustomer(CustomerCreateRequest request);
+
+    @Mapping(source = "irsaliyeGunleri", target = "irsaliyeGunleri")
     void updateCustomerFromDto(CustomerUpdateRequest request, @MappingTarget Customer customer);
 
 }

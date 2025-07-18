@@ -23,6 +23,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+
 @Service
 @RequiredArgsConstructor
 public class CustomerService {
@@ -78,9 +79,21 @@ public class CustomerService {
             customer.setWorkingDays(EnumSet.allOf(com.firinyonetim.backend.entity.DayOfWeek.class));
         }
 
+        if (request.getIrsaliyeGunleri() != null) {
+            customer.setIrsaliyeGunleri(new HashSet<>(request.getIrsaliyeGunleri()));
+        } else {
+            customer.setIrsaliyeGunleri(EnumSet.allOf(com.firinyonetim.backend.entity.DayOfWeek.class));
+        }
+
         if (customer.getTaxInfo() != null) {
             customer.getTaxInfo().setCustomer(customer);
         }
+
+        if (customer.getTaxInfo() != null) {
+            customer.getTaxInfo().setCustomer(customer);
+        }
+
+
 
         // 3. Müşteriyi kaydet. Cascade ayarları sayesinde ilişkili tüm varlıklar da kaydedilecek.
         Customer savedCustomer = customerRepository.save(customer);
@@ -397,6 +410,25 @@ public class CustomerService {
         return customerMapper.toCustomerResponse(updatedCustomer);
     }
 
+    @Transactional
+    public CustomerResponse updateCustomerIrsaliyeGunleri(Long customerId, List<String> irsaliyeGunleri) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+        Set<com.firinyonetim.backend.entity.DayOfWeek> days = new HashSet<>();
+        if (irsaliyeGunleri != null) {
+            for (String day : irsaliyeGunleri) {
+                try {
+                    days.add(com.firinyonetim.backend.entity.DayOfWeek.valueOf(day.toUpperCase()));
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("Invalid day: " + day);
+                }
+            }
+        }
+        customer.setIrsaliyeGunleri(days);
+        Customer updatedCustomer = customerRepository.save(customer);
+        return customerMapper.toCustomerResponse(updatedCustomer);
+    }
+
     // CustomerService.java içinde...
     @Transactional
     public CustomerProductAssignmentResponse assignOrUpdateProductToCustomer(Long customerId, CustomerProductAssignmentRequest request) {
@@ -452,5 +484,4 @@ public class CustomerService {
         }
         customerProductAssignmentRepository.deleteByCustomerIdAndProductId(customerId, productId);
     }
-
 }
