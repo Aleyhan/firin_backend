@@ -36,14 +36,6 @@ public class TransactionController {
         return new ResponseEntity<>(transactionService.createTransaction(request), HttpStatus.CREATED);
     }
 
-    // ... TransactionController sınıfının içinde ...
-
-    @PutMapping("/{transactionId}")
-    public ResponseEntity<TransactionResponse> updateTransaction(
-            @PathVariable Long transactionId,
-            @Valid @RequestBody TransactionUpdateRequest request) {
-        return ResponseEntity.ok(transactionService.updateTransaction(transactionId, request));
-    }
 
     @DeleteMapping("/{transactionId}")
     public ResponseEntity<Void> deleteTransaction(@PathVariable Long transactionId) {

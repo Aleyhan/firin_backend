@@ -2,22 +2,16 @@ package com.firinyonetim.backend.service;
 
 import com.firinyonetim.backend.dto.address.request.AddressRequest;
 import com.firinyonetim.backend.dto.customer.request.CustomerCreateRequest;
+import com.firinyonetim.backend.dto.customer.request.CustomerProductAssignmentRequest;
 import com.firinyonetim.backend.dto.customer.request.CustomerUpdateRequest;
+import com.firinyonetim.backend.dto.customer.response.CustomerProductAssignmentResponse;
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
 import com.firinyonetim.backend.dto.customer.response.LastPaymentDateResponse;
 import com.firinyonetim.backend.dto.tax_info.request.TaxInfoRequest;
 import com.firinyonetim.backend.entity.*;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
-import com.firinyonetim.backend.mapper.AddressMapper;
-import com.firinyonetim.backend.mapper.CustomerMapper;
-import com.firinyonetim.backend.mapper.ProductMapper;
-import com.firinyonetim.backend.mapper.TaxInfoMapper;
-import com.firinyonetim.backend.repository.CustomerRepository;
-import com.firinyonetim.backend.repository.ProductRepository;
-import com.firinyonetim.backend.repository.RouteRepository;
-import com.firinyonetim.backend.repository.RouteAssignmentRepository;
-import com.firinyonetim.backend.repository.TaxInfoRepository;
-import com.firinyonetim.backend.repository.TransactionPaymentRepository;
+import com.firinyonetim.backend.mapper.*;
+import com.firinyonetim.backend.repository.*;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -42,6 +36,10 @@ public class CustomerService {
     private final TransactionPaymentRepository transactionPaymentRepository;
     private final RouteRepository routeRepository;
     private final RouteAssignmentRepository routeAssignmentRepository;
+    private final CustomerProductAssignmentRepository customerProductAssignmentRepository;
+    private final CustomerProductAssignmentMapper customerProductAssignmentMapper;
+
+
 
 
     public List<CustomerResponse> getAllCustomers() {
@@ -66,11 +64,6 @@ public class CustomerService {
         // CustomerMapper, içindeki TaxInfoRequest ve AddressRequest'leri de çevirecektir.
         Customer customer = customerMapper.toCustomer(request);
 
-// --- DEBUG İÇİN BU SATIRI EKLEYİN ---
-        System.out.println("Request DTO workingDays: " + request.getWorkingDays());
-        System.out.println("Mapped Entity workingDays: " + customer.getWorkingDays());
-        // --- DEBUG SONU ---
-
         // Vergi bilgisinin customer referansını set et.
         if (customer.getTaxInfo() != null) {
             customer.getTaxInfo().setCustomer(customer);
@@ -81,9 +74,9 @@ public class CustomerService {
         // Bu, mapper'ın eksik bıraktığı işi tamamlar.
         if (request.getWorkingDays() != null) {
             customer.setWorkingDays(new HashSet<>(request.getWorkingDays()));
+        } else {
+            customer.setWorkingDays(EnumSet.allOf(com.firinyonetim.backend.entity.DayOfWeek.class));
         }
-        // --- DÜZELTME SONU ---
-        System.out.println("Before Save - Entity workingDays: " + customer.getWorkingDays());
 
         if (customer.getTaxInfo() != null) {
             customer.getTaxInfo().setCustomer(customer);
@@ -403,4 +396,61 @@ public class CustomerService {
         Customer updatedCustomer = customerRepository.save(customer);
         return customerMapper.toCustomerResponse(updatedCustomer);
     }
+
+    // CustomerService.java içinde...
+    @Transactional
+    public CustomerProductAssignmentResponse assignOrUpdateProductToCustomer(Long customerId, CustomerProductAssignmentRequest request) {
+        Customer customer = customerRepository.findById(customerId)
+            .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+        Product product = productRepository.findById(request.getProductId())
+            .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + request.getProductId()));
+
+        // Mevcut atamayı bul veya yenisini oluştur.
+        CustomerProductAssignment assignment = customerProductAssignmentRepository
+                .findByCustomerIdAndProductId(customerId, request.getProductId())
+                .orElse(new CustomerProductAssignment());
+
+        // Alanları set et.
+        assignment.setCustomer(customer);
+        assignment.setProduct(product);
+        assignment.setPricingType(request.getPricingType());
+        assignment.setSpecialPrice(request.getSpecialPrice()); // null olabilir
+
+        // Kaydet ve DTO'ya çevirip döndür.
+        CustomerProductAssignment savedAssignment = customerProductAssignmentRepository.save(assignment);
+        return customerProductAssignmentMapper.toResponse(savedAssignment);
+    }
+
+    public List<CustomerProductAssignmentResponse> getCustomerProductAssignments(Long customerId) {
+        // 1. Müşterinin var olup olmadığını kontrol et.
+        if (!customerRepository.existsById(customerId)) {
+            throw new ResourceNotFoundException("Customer not found with id: " + customerId);
+        }
+
+        // 2. Repository'yi kullanarak müşterinin tüm ürün atamalarını bul.
+        // Bu metodu repository'ye ekleyeceğiz.
+        List<CustomerProductAssignment> assignments = customerProductAssignmentRepository.findByCustomerId(customerId);
+
+        // 3. Bulunan entity listesini, DTO listesine çevir.
+        // Bu işi CustomerProductAssignmentMapper yapacak.
+        return assignments.stream()
+                .map(customerProductAssignmentMapper::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void removeAssignedProduct(Long customerId, Long productId) {
+        if (!customerRepository.existsById(customerId)) {
+            throw new ResourceNotFoundException("Customer not found with id: " + customerId);
+        }
+        if (!productRepository.existsById(productId)) {
+            throw new ResourceNotFoundException("Product not found with id: " + productId);
+        }
+        boolean exists = customerProductAssignmentRepository.findByCustomerIdAndProductId(customerId, productId).isPresent();
+        if (!exists) {
+            throw new ResourceNotFoundException("Assignment not found for customerId: " + customerId + " and productId: " + productId);
+        }
+        customerProductAssignmentRepository.deleteByCustomerIdAndProductId(customerId, productId);
+    }
+
 }

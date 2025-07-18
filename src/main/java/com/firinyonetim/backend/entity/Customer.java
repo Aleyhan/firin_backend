@@ -2,6 +2,8 @@ package com.firinyonetim.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 import java.util.Set;
@@ -55,4 +57,10 @@ public class Customer {
     @Enumerated(EnumType.STRING)
     @Column(name = "day_of_week", nullable = false)
     private Set<DayOfWeek> workingDays = new HashSet<>();
+
+    // Customer.java sınıfının içinde...
+    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private Set<CustomerProductAssignment> productAssignments = new HashSet<>();
 }

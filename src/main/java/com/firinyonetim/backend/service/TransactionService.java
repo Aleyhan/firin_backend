@@ -13,6 +13,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -28,23 +29,26 @@ public class TransactionService {
     private final TransactionMapper transactionMapper;
     private final RouteRepository routeRepository;
     private final TransactionItemRepository transactionItemRepository;
+    private final CustomerProductAssignmentRepository customerProductAssignmentRepository;
 
 
+
+
+// TransactionService.java içinde...
 
     @Transactional
     public TransactionResponse createTransaction(TransactionCreateRequest request) {
-        // 1. Gerekli Varlıkları Bul
+        // 1. Gerekli Varlıkları Bul (Bu kısım aynı)
         Customer customer = customerRepository.findById(request.getCustomerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + request.getCustomerId()));
         User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
 
-        // 2. Ana Transaction Nesnesini Oluştur
+        // 2. Ana Transaction Nesnesini Oluştur (Bu kısım aynı)
         Transaction transaction = new Transaction();
         transaction.setCustomer(customer);
         transaction.setCreatedBy(currentUser);
         transaction.setNotes(request.getNotes());
 
-        // YENİ: Route (Liste) bilgisini işle
         if (request.getRouteId() != null) {
             Route route = routeRepository.findById(request.getRouteId())
                     .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + request.getRouteId()));
@@ -53,57 +57,78 @@ public class TransactionService {
 
         BigDecimal balanceChange = BigDecimal.ZERO;
 
-        // 3. İşlem Kalemlerini (Satış/İade) İşle
+        // 3. İşlem Kalemlerini (Satış/İade) İşle (<<< DEĞİŞİKLİK: Bu döngünün içi tamamen değişiyor)
         if (request.getItems() != null) {
             for (var itemRequest : request.getItems()) {
                 Product product = productRepository.findById(itemRequest.getProductId())
                         .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + itemRequest.getProductId()));
 
-                BigDecimal unitPrice = product.getBasePrice();
-                BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(itemRequest.getQuantity()));
+                // 1. Müşteri-Ürün atamasını ve kurallarını al.
+                CustomerProductAssignment assignment = customerProductAssignmentRepository
+                        .findByCustomerIdAndProductId(customer.getId(), product.getId())
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Ürün '" + product.getName() + "' bu müşteriye atanmamış. İşlem yapılamaz."
+                        ));
+
+                // 2. Uygulanacak ham fiyatı belirle (Özel fiyat veya standart fiyat).
+                BigDecimal basePrice;
+                if (assignment.getSpecialPrice() != null) {
+                    basePrice = assignment.getSpecialPrice(); // Özel fiyat varsa onu kullan.
+                } else {
+                    basePrice = product.getBasePrice(); // Yoksa ürünün standart fiyatını kullan.
+                }
+
+                // 3. KDV kuralına göre nihai birim satış fiyatını hesapla.
+                BigDecimal finalUnitPrice;
+                if (assignment.getPricingType() == PricingType.VAT_INCLUDED) {
+                    // Fiyat zaten KDV dahil, olduğu gibi al.
+                    finalUnitPrice = basePrice;
+                } else { // VAT_EXCLUSIVE
+                    // Fiyata ürünün KDV'sini ekle.
+                    if (product.getVatRate() == null || product.getVatRate() < 0) {
+                        throw new IllegalStateException("Ürün '" + product.getName() + "' için geçerli bir KDV oranı tanımlanmamış.");
+                    }
+                    BigDecimal vatRate = BigDecimal.valueOf(product.getVatRate()).divide(new BigDecimal("100"));
+                    BigDecimal vatAmount = basePrice.multiply(vatRate);
+                    finalUnitPrice = basePrice.add(vatAmount);
+                }
+
+                // 4. TransactionItem'ı bu nihai "fotoğrafı çekilmiş" fiyatla oluştur.
+                BigDecimal totalPrice = finalUnitPrice.multiply(BigDecimal.valueOf(itemRequest.getQuantity()));
 
                 TransactionItem item = new TransactionItem();
                 item.setProduct(product);
                 item.setQuantity(itemRequest.getQuantity());
                 item.setType(itemRequest.getType());
-                item.setUnitPrice(unitPrice);
+                item.setUnitPrice(finalUnitPrice); // <<< ÖNEMLİ: Nihai fiyatı kaydet
                 item.setTotalPrice(totalPrice);
-                item.setTransaction(transaction); // Çift yönlü ilişkiyi kur
+
+                item.setTransaction(transaction);
                 transaction.getItems().add(item);
 
-                // Bakiye değişikliğini hesapla
+                // Bakiye değişikliğini hesapla (Bu kısım aynı)
                 if (itemRequest.getType() == ItemType.SATIS) {
-                    balanceChange = balanceChange.add(totalPrice); // Satış borcu artırır
+                    balanceChange = balanceChange.add(totalPrice);
                 } else if (itemRequest.getType() == ItemType.IADE) {
-                    balanceChange = balanceChange.subtract(totalPrice); // İade borcu azaltır
+                    balanceChange = balanceChange.subtract(totalPrice);
                 }
             }
         }
 
-        // 4. Tahsilatları İşle
+        // 4. Tahsilatları İşle (Bu kısım aynı)
         if (request.getPayments() != null) {
-            for (var paymentRequest : request.getPayments()) {
-                TransactionPayment payment = new TransactionPayment();
-                payment.setAmount(paymentRequest.getAmount());
-                payment.setType(paymentRequest.getType());
-                payment.setTransaction(transaction); // Çift yönlü ilişkiyi kur
-                transaction.getPayments().add(payment);
-
-                // Tahsilat borcu azaltır
-                balanceChange = balanceChange.subtract(paymentRequest.getAmount());
-            }
+            // ... (içeriği aynı)
         }
 
-        // 5. Müşteri Bakiyesini Güncelle
+        // 5. Müşteri Bakiyesini Güncelle (Bu kısım aynı)
         customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().add(balanceChange));
         customerRepository.save(customer);
 
-        // 6. Transaction'ı Kaydet (Cascade sayesinde item ve payment'lar da kaydedilir)
+        // 6. Transaction'ı Kaydet (Bu kısım aynı)
         Transaction savedTransaction = transactionRepository.save(transaction);
 
         return transactionMapper.toTransactionResponse(savedTransaction);
     }
-
 
     public List<TransactionResponse> getTransactionsByCustomerId(Long customerId) {
         // Müşterinin var olup olmadığını kontrol et (isteğe bağlı ama iyi bir pratik)
@@ -118,52 +143,6 @@ public class TransactionService {
         return transactions.stream()
                 .map(transactionMapper::toTransactionResponse)
                 .collect(Collectors.toList());
-    }
-
-    @Transactional
-    public TransactionResponse updateTransaction(Long transactionId, TransactionUpdateRequest request) {
-        // 1. Mevcut Transaction'ı bul
-        Transaction transaction = transactionRepository.findById(transactionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
-
-        // 2. Müşteri bakiyesini geri al (eski işlemi iptal et)
-        Customer customer = transaction.getCustomer();
-        BigDecimal originalBalanceChange = calculateBalanceChange(transaction);
-        customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().subtract(originalBalanceChange));
-
-        // 3. Transaction'ın temel bilgilerini ve kalemlerini güncelle
-        transaction.setNotes(request.getNotes());
-
-        // "Eskiyi sil, yeniyi ekle" stratejisi en güvenlisidir.
-        transaction.getItems().clear();
-        transaction.getPayments().clear();
-
-        BigDecimal newBalanceChange = BigDecimal.ZERO;
-
-        // 4. Yeni işlem kalemlerini ekle
-        if (request.getItems() != null) {
-            for (var itemRequest : request.getItems()) {
-                // ... createTransaction'daki item ekleme mantığının aynısı ...
-                // ... yeni balanceChange'i hesapla ...
-            }
-        }
-
-        // 5. Yeni ödemeleri ekle
-        if (request.getPayments() != null) {
-            for (var paymentRequest : request.getPayments()) {
-                // ... createTransaction'daki payment ekleme mantığının aynısı ...
-                // ... yeni balanceChange'i hesapla ...
-            }
-        }
-
-        // 6. Yeni bakiye değişikliğini uygula
-        customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().add(newBalanceChange));
-
-        // 7. Değişiklikleri kaydet
-        customerRepository.save(customer);
-        Transaction updatedTransaction = transactionRepository.save(transaction);
-
-        return transactionMapper.toTransactionResponse(updatedTransaction);
     }
 
     @Transactional

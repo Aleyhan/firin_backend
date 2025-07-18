@@ -1,7 +1,9 @@
 package com.firinyonetim.backend.controller;
 
 import com.firinyonetim.backend.dto.customer.request.CustomerCreateRequest;
+import com.firinyonetim.backend.dto.customer.request.CustomerProductAssignmentRequest;
 import com.firinyonetim.backend.dto.customer.request.CustomerUpdateRequest;
+import com.firinyonetim.backend.dto.customer.response.CustomerProductAssignmentResponse;
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
 import com.firinyonetim.backend.dto.customer.response.LastPaymentDateResponse;
 import com.firinyonetim.backend.dto.route.response.RouteResponse;
@@ -145,6 +147,33 @@ public class CustomerController {
             @RequestBody List<String> workdays) {
         CustomerResponse response = customerService.updateCustomerWorkdays(customerId, workdays);
         return ResponseEntity.ok(response);
+    }
+
+    // CustomerController.java içinde...
+    @PutMapping("/{customerId}/products") // PUT, çünkü bu işlem "oluştur veya güncelle" (upsert) mantığında.
+    @PreAuthorize("hasRole('YONETICI')")
+    public ResponseEntity<CustomerProductAssignmentResponse> assignOrUpdateProductToCustomer(
+            @PathVariable Long customerId,
+            @RequestBody CustomerProductAssignmentRequest request) {
+        return ResponseEntity.ok(customerService.assignOrUpdateProductToCustomer(customerId, request));
+    }
+
+    // CustomerController.java içinde...
+
+    // YENİ ENDPOINT: Bir müşteriye atanmış tüm ürünleri ve kurallarını listeler.
+    @GetMapping("/{customerId}/products")
+    @PreAuthorize("hasRole('YONETICI')")
+    public ResponseEntity<List<CustomerProductAssignmentResponse>> getCustomerProductAssignments(@PathVariable Long customerId) {
+        return ResponseEntity.ok(customerService.getCustomerProductAssignments(customerId));
+    }
+
+    @DeleteMapping("/{customerId}/products/{productId}")
+    @PreAuthorize("hasRole('YONETICI')")
+    public ResponseEntity<Void> removeAssignedProduct(
+            @PathVariable Long customerId,
+            @PathVariable Long productId) {
+        customerService.removeAssignedProduct(customerId, productId);
+        return ResponseEntity.noContent().build();
     }
 
 }
