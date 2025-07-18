@@ -25,7 +25,6 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
-    private final SpecialProductPriceRepository specialPriceRepository;
     private final TransactionMapper transactionMapper;
     private final RouteRepository routeRepository;
     private final TransactionItemRepository transactionItemRepository;
@@ -60,7 +59,7 @@ public class TransactionService {
                 Product product = productRepository.findById(itemRequest.getProductId())
                         .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + itemRequest.getProductId()));
 
-                BigDecimal unitPrice = getApplicablePrice(customer.getId(), product.getId());
+                BigDecimal unitPrice = product.getBasePrice();
                 BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(itemRequest.getQuantity()));
 
                 TransactionItem item = new TransactionItem();
@@ -105,18 +104,6 @@ public class TransactionService {
         return transactionMapper.toTransactionResponse(savedTransaction);
     }
 
-    private BigDecimal getApplicablePrice(Long customerId, Long productId) {
-        Optional<SpecialProductPrice> specialPriceOpt = specialPriceRepository
-                .findByCustomerIdAndProductId(customerId, productId);
-
-        if (specialPriceOpt.isPresent()) {
-            return specialPriceOpt.get().getPrice();
-        } else {
-            Product product = productRepository.findById(productId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
-            return product.getBasePrice();
-        }
-    }
 
     public List<TransactionResponse> getTransactionsByCustomerId(Long customerId) {
         // Müşterinin var olup olmadığını kontrol et (isteğe bağlı ama iyi bir pratik)

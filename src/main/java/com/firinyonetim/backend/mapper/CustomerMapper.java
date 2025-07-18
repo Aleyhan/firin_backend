@@ -10,7 +10,7 @@ import org.mapstruct.MappingTarget;
 
 // 'uses' attribute'ü sayesinde, Customer'ı map'lerken
 // içindeki adres listesini map'lemek için AddressMapper'ı kullanacağını biliyor.
-@Mapper(componentModel = "spring", uses = {AddressMapper.class, SpecialPriceMapper.class, TaxInfoMapper.class})
+@Mapper(componentModel = "spring", uses = {AddressMapper.class, TaxInfoMapper.class})
 public interface CustomerMapper {
 
     // CustomerCreateRequest'ten Customer'a dönüşüm.

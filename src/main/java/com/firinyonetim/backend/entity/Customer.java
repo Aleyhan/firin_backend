@@ -47,9 +47,6 @@ public class Customer {
     @JoinColumn(name = "address_id", referencedColumnName = "id") // YENİ: Müşteri tablosuna adresin ID'sini ekliyoruz.
     private Address address; // List<Address> yerine tek bir Address nesnesi
 
-    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<SpecialProductPrice> specialPrices = new ArrayList<>();
-
     @OneToOne(mappedBy = "customer", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     private TaxInfo taxInfo;
 

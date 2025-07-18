@@ -5,7 +5,6 @@ import com.firinyonetim.backend.dto.customer.request.CustomerUpdateRequest;
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
 import com.firinyonetim.backend.dto.customer.response.LastPaymentDateResponse;
 import com.firinyonetim.backend.dto.route.response.RouteResponse;
-import com.firinyonetim.backend.dto.special_price.request.SpecialPriceRequest;
 import com.firinyonetim.backend.dto.tax_info.request.TaxInfoRequest;
 import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
 import com.firinyonetim.backend.service.CustomerService;
@@ -52,15 +51,6 @@ public class CustomerController {
         return ResponseEntity.ok(customerService.createTaxInfoForCustomer(customerId, taxInfoRequest));
     }
 
-    @PostMapping("/{customerId}/special-prices")
-    public ResponseEntity<CustomerResponse> addOrUpdateSpecialPrice(
-            @PathVariable Long customerId,
-            @RequestBody SpecialPriceRequest request) {
-        return ResponseEntity.ok(customerService.addOrUpdateSpecialPrice(customerId, request));
-    }
-
-    // ... CustomerController sınıfının içinde ...
-
     @PutMapping("/{customerId}")
     public ResponseEntity<CustomerResponse> updateCustomer(
             @PathVariable Long customerId,
@@ -83,12 +73,6 @@ public class CustomerController {
     @DeleteMapping("/{customerId}")
     public ResponseEntity<Void> deleteCustomer(@PathVariable Long customerId) {
         customerService.deleteCustomer(customerId);
-        return ResponseEntity.noContent().build();
-    }
-
-    @DeleteMapping("/{customerId}/special-prices/{productId}")
-    public ResponseEntity<Void> removeSpecialPrice(@PathVariable Long customerId, @PathVariable Long productId) {
-        customerService.removeSpecialPrice(customerId, productId);
         return ResponseEntity.noContent().build();
     }
 

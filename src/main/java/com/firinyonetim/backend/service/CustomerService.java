@@ -5,7 +5,6 @@ import com.firinyonetim.backend.dto.customer.request.CustomerCreateRequest;
 import com.firinyonetim.backend.dto.customer.request.CustomerUpdateRequest;
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
 import com.firinyonetim.backend.dto.customer.response.LastPaymentDateResponse;
-import com.firinyonetim.backend.dto.special_price.request.SpecialPriceRequest;
 import com.firinyonetim.backend.dto.tax_info.request.TaxInfoRequest;
 import com.firinyonetim.backend.entity.*;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
@@ -17,7 +16,6 @@ import com.firinyonetim.backend.repository.CustomerRepository;
 import com.firinyonetim.backend.repository.ProductRepository;
 import com.firinyonetim.backend.repository.RouteRepository;
 import com.firinyonetim.backend.repository.RouteAssignmentRepository;
-import com.firinyonetim.backend.repository.SpecialProductPriceRepository;
 import com.firinyonetim.backend.repository.TaxInfoRepository;
 import com.firinyonetim.backend.repository.TransactionPaymentRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -36,7 +34,6 @@ import java.util.stream.Collectors;
 public class CustomerService {
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
-    private final SpecialProductPriceRepository specialPriceRepository;
     private final CustomerMapper customerMapper;
     private final ProductMapper productMapper;
     private final TaxInfoRepository taxInfoRepository;
@@ -111,34 +108,6 @@ public class CustomerService {
                 .orElse(new LastPaymentDateResponse(false, null));
     }
 
-    @Transactional
-    public CustomerResponse addOrUpdateSpecialPrice(Long customerId, SpecialPriceRequest request) {
-        Customer customer = customerRepository.findById(customerId)
-                .orElseThrow(() -> new EntityNotFoundException("Customer not found with id: " + customerId));
-        Product product = productRepository.findById(request.getProductId())
-                .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + request.getProductId()));
-
-        SpecialProductPrice specialPrice = specialPriceRepository
-                .findByCustomerIdAndProductId(customerId, request.getProductId())
-                .map(existingPrice -> {
-                    existingPrice.setPrice(request.getPrice());
-                    return existingPrice;
-                })
-                .orElseGet(() -> {
-                    SpecialProductPrice newPrice = new SpecialProductPrice();
-                    newPrice.setCustomer(customer);
-                    newPrice.setProduct(product);
-                    newPrice.setPrice(request.getPrice());
-                    customer.getSpecialPrices().add(newPrice);
-                    return newPrice;
-                });
-
-        specialPriceRepository.save(specialPrice);
-
-        return customerMapper.toCustomerResponse(customer);
-    }
-
-// ... CustomerService sınıfının içinde ...
 
     @Transactional
     public CustomerResponse updateCustomer(Long customerId, CustomerUpdateRequest request) {
@@ -214,17 +183,6 @@ public class CustomerService {
         customerRepository.save(customer);
     }
 
-    @Transactional
-    public void removeSpecialPrice(Long customerId, Long productId) {
-        // Önce varlıkların olup olmadığını kontrol et
-        if (!customerRepository.existsById(customerId)) {
-            throw new ResourceNotFoundException("Customer not found with id: " + customerId);
-        }
-        if (!productRepository.existsById(productId)) {
-            throw new ResourceNotFoundException("Product not found with id: " + productId);
-        }
-        specialPriceRepository.deleteByCustomerIdAndProductId(customerId, productId);
-    }
 
     @Transactional
     public CustomerResponse updateCustomerFields(Long customerId, Map<String, Object> updates) {
