@@ -28,7 +28,5 @@ public class Product {
 
     private Integer grammage; // Gramaj, örn: 250, 1000
 
-    private boolean isActive = true;
-
 
 }

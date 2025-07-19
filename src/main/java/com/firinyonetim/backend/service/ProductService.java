@@ -42,11 +42,8 @@ public class ProductService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
 
-        // Eskiden burada tüm alanları tek tek set ediyorduk.
-        // Şimdi bu işi tek satırda MapStruct'a yaptırıyoruz.
         productMapper.updateProductFromDto(request, product);
 
-        // Güncellenmiş ürünü kaydet ve response'a çevirip döndür.
         return productMapper.toProductResponse(productRepository.save(product));
     }
 
@@ -54,8 +51,7 @@ public class ProductService {
     public void deleteProduct(Long productId) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
-        // Soft delete: Ürünü pasif hale getiriyoruz.
-        product.setActive(false);
-        productRepository.save(product);
+
+        productRepository.delete(product);
     }
 }

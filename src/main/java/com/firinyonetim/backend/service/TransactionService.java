@@ -117,7 +117,15 @@ public class TransactionService {
 
         // 4. Tahsilatları İşle (Bu kısım aynı)
         if (request.getPayments() != null) {
-            // ... (içeriği aynı)
+            for (var paymentRequest : request.getPayments()) {
+                TransactionPayment payment = new TransactionPayment();
+                payment.setAmount(paymentRequest.getAmount());
+                payment.setType(paymentRequest.getType());
+                payment.setTransaction(transaction);
+                transaction.getPayments().add(payment);
+                // Tahsilat bakiyeden düşülür
+                balanceChange = balanceChange.subtract(paymentRequest.getAmount());
+            }
         }
 
         // 5. Müşteri Bakiyesini Güncelle (Bu kısım aynı)

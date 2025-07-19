@@ -19,16 +19,14 @@ public class ProductUpdateRequest {
 
     @NotNull(message = "KDV oranı boş olamaz.")
     @PositiveOrZero(message = "KDV oranı 0 veya daha büyük olmalıdır.")
-    private Integer vatRate; // Vergi Oranı (KDV)
+    private Integer vatRate;
 
-    private String productGroup; // Ürün Grubu
+    private String productGroup;
 
     @NotBlank(message = "Birim boş olamaz.")
-    private String unit; // Birim
+    private String unit;
 
     @Positive(message = "Gramaj pozitif bir değer olmalıdır.")
-    private Integer grammage; // Gramaj
+    private Integer grammage;
 
-    @NotNull(message = "Aktiflik durumu belirtilmelidir.")
-    private Boolean isActive; // Ürünün aktif olup olmadığını belirler
 }

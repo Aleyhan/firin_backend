@@ -8,5 +8,9 @@ public class ProductResponse {
     private Long id;
     private String name;
     private BigDecimal basePrice;
-    private boolean isActive;
+    private Integer vatRate;
+    private String productGroup;
+    private String unit;
+    private Integer grammage;
+
 }
