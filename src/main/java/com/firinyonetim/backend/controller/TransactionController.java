@@ -58,5 +58,13 @@ public class TransactionController {
         return ResponseEntity.ok(transactionService.updateTransactionItemPrice(transactionId, itemId, request));
     }
 
+    // YENİ ENDPOINT
+    @PutMapping("/{transactionId}")
+    public ResponseEntity<TransactionResponse> updateTransaction(
+            @PathVariable Long transactionId,
+            @Valid @RequestBody TransactionUpdateRequest request) {
+        return ResponseEntity.ok(transactionService.updateTransaction(transactionId, request));
+    }
+
 
 }

@@ -248,6 +248,64 @@ public class TransactionService {
         return transactionMapper.toTransactionResponse(updatedTransaction);
     }
 
+    @Transactional
+    public TransactionResponse updateTransaction(Long transactionId, TransactionUpdateRequest request) {
+        // 1. Mevcut işlemi tüm detaylarıyla bul
+        Transaction transaction = transactionRepository.findByIdWithDetails(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
+
+        Customer customer = transaction.getCustomer();
+
+        // 2. Müşteri bakiyesinden bu işlemin ESKİ etkisini GERİ AL
+        BigDecimal oldBalanceChange = calculateBalanceChange(transaction);
+        customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().subtract(oldBalanceChange));
+
+        // 3. İşlem detaylarını güncelle
+        transaction.setNotes(request.getNotes());
+
+        // Mevcut item ve payment'ları temizle ve yenilerini ekle
+        transaction.getItems().clear();
+        transaction.getPayments().clear();
+
+        // Yeni item'ları işle
+        if (request.getItems() != null) {
+            request.getItems().forEach(itemRequest -> {
+                Product product = productRepository.findById(itemRequest.getProductId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + itemRequest.getProductId()));
+
+                TransactionItem newItem = new TransactionItem();
+                newItem.setProduct(product);
+                newItem.setQuantity(itemRequest.getQuantity());
+                newItem.setType(itemRequest.getType());
+                newItem.setUnitPrice(itemRequest.getUnitPrice());
+                newItem.setTotalPrice(itemRequest.getUnitPrice().multiply(BigDecimal.valueOf(itemRequest.getQuantity())));
+                newItem.setTransaction(transaction);
+                transaction.getItems().add(newItem);
+            });
+        }
+
+        // Yeni payment'ları işle
+        if (request.getPayments() != null) {
+            request.getPayments().forEach(paymentRequest -> {
+                TransactionPayment newPayment = new TransactionPayment();
+                newPayment.setAmount(paymentRequest.getAmount());
+                newPayment.setType(paymentRequest.getType());
+                newPayment.setTransaction(transaction);
+                transaction.getPayments().add(newPayment);
+            });
+        }
+
+        // 4. Müşteri bakiyesine bu işlemin YENİ etkisini EKLE
+        BigDecimal newBalanceChange = calculateBalanceChange(transaction);
+        customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().add(newBalanceChange));
+
+        // 5. Müşteri ve İşlem'i kaydet
+        customerRepository.save(customer);
+        Transaction updatedTransaction = transactionRepository.save(transaction);
+
+        return transactionMapper.toTransactionResponse(updatedTransaction);
+    }
+
 
 
 }
