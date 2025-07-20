@@ -27,4 +27,6 @@ public class CustomerResponse {
 
     private Set<DayOfWeek> workingDays;
     private Set<DayOfWeek> irsaliyeGunleri;
+    private List<Long> routeIds;
+
 }

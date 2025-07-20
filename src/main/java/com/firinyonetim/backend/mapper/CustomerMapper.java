@@ -22,6 +22,7 @@ public interface CustomerMapper {
     // otomatik olarak List<AddressResponse> listesine çevirecek.
     @Mapping(source = "workingDays", target = "workingDays")
     @Mapping(source = "irsaliyeGunleri", target = "irsaliyeGunleri")
+    @Mapping(target = "routeIds", ignore = true) // YENİ MAPPING
     CustomerResponse toCustomerResponse(Customer customer);
 
     @Mapping(source = "irsaliyeGunleri", target = "irsaliyeGunleri")

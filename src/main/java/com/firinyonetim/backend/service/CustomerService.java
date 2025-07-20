@@ -16,7 +16,14 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.firinyonetim.backend.entity.RouteAssignment;
+import java.util.Map;
+import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.mapping;
+import static java.util.stream.Collectors.toList;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -44,8 +51,28 @@ public class CustomerService {
 
 
     public List<CustomerResponse> getAllCustomers() {
-        return customerRepository.findAll().stream()
-                .map(customerMapper::toCustomerResponse)
+        List<Customer> customers = customerRepository.findAll();
+
+        // Tüm rota atamalarını tek bir sorgu ile çek.
+        List<RouteAssignment> allAssignments = routeAssignmentRepository.findAll();
+
+        // Müşteri ID'sine göre rota ID'lerini gruplayan bir harita oluştur.
+        // Örn: { 101L -> [1L, 2L], 102L -> [2L] }
+        Map<Long, List<Long>> customerToRouteIdsMap = allAssignments.stream()
+                .collect(groupingBy(
+                        assignment -> assignment.getCustomer().getId(),
+                        mapping(assignment -> assignment.getRoute().getId(), toList())
+                ));
+
+        // Her bir müşteri için DTO oluştururken, haritadan rota ID'lerini ekle.
+        return customers.stream()
+                .map(customer -> {
+                    CustomerResponse response = customerMapper.toCustomerResponse(customer);
+                    // Müşterinin rota ID'lerini haritadan al ve DTO'ya set et.
+                    // Eğer müşteri hiçbir rotaya atanmamışsa, boş bir liste ata.
+                    response.setRouteIds(customerToRouteIdsMap.getOrDefault(customer.getId(), List.of()));
+                    return response;
+                })
                 .collect(Collectors.toList());
     }
 
@@ -454,19 +481,41 @@ public class CustomerService {
     }
 
     public List<CustomerProductAssignmentResponse> getCustomerProductAssignments(Long customerId) {
-        // 1. Müşterinin var olup olmadığını kontrol et.
         if (!customerRepository.existsById(customerId)) {
             throw new ResourceNotFoundException("Customer not found with id: " + customerId);
         }
 
-        // 2. Repository'yi kullanarak müşterinin tüm ürün atamalarını bul.
-        // Bu metodu repository'ye ekleyeceğiz.
         List<CustomerProductAssignment> assignments = customerProductAssignmentRepository.findByCustomerId(customerId);
 
-        // 3. Bulunan entity listesini, DTO listesine çevir.
-        // Bu işi CustomerProductAssignmentMapper yapacak.
+        // DEĞİŞİKLİK BURADA: DTO'ya çevirirken nihai fiyatı hesapla
         return assignments.stream()
-                .map(customerProductAssignmentMapper::toResponse)
+                .map(assignment -> {
+                    // Önce temel alanları mapper ile doldur
+                    CustomerProductAssignmentResponse response = customerProductAssignmentMapper.toResponse(assignment);
+
+                    // Fiyat hesaplama mantığı
+                    Product product = assignment.getProduct();
+                    BigDecimal priceToUse = assignment.getSpecialPrice() != null ? assignment.getSpecialPrice() : product.getBasePrice();
+
+                    BigDecimal finalPrice;
+                    if (assignment.getPricingType() == PricingType.VAT_INCLUDED) {
+                        // Fiyat zaten KDV dahil, olduğu gibi al.
+                        finalPrice = priceToUse;
+                    } else { // VAT_EXCLUSIVE
+                        if (product.getVatRate() == null || product.getVatRate() < 0) {
+                            throw new IllegalStateException("Ürün '" + product.getName() + "' için geçerli bir KDV oranı tanımlanmamış.");
+                        }
+                        // KDV'yi hesapla ve ekle
+                        BigDecimal vatRate = BigDecimal.valueOf(product.getVatRate()).divide(new BigDecimal("100"));
+                        BigDecimal vatAmount = priceToUse.multiply(vatRate);
+                        finalPrice = priceToUse.add(vatAmount);
+                    }
+
+                    // Hesaplanan nihai fiyatı DTO'ya set et (2 ondalık basamağa yuvarlamak iyi bir pratiktir)
+                    response.setFinalUnitPrice(finalPrice.setScale(2, RoundingMode.HALF_UP));
+
+                    return response;
+                })
                 .collect(Collectors.toList());
     }
 

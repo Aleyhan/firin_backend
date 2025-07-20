@@ -4,3 +4,39 @@ ikinci fatura irsaliyede bana haber ver
 
 irsaliye fautre için önce onay kutusuna at toplu kes.
 
+---------
+Evet, bu çok keskin bir gözlem ve teknik olarak tamamen doğru. Önceki yapıda, backend `createTransaction` çağrıldığında, o anki verilere göre nihai fiyatı kendisi hesaplayıp `TransactionItem`'a kaydediyordu. Yani, evet, bir "fiyat fotoğrafı" çekiyordu.
+
+O zaman neden bu değişikliği yaptık?
+
+Cevap, **"O an"** kelimesinin tanımında yatıyor. İki sistem arasındaki "o an" farklı olabilir ve bu fark, kritik tutarsızlıklara yol açabilir.
+
+### İki "O An" Arasındaki Tehlikeli Fark
+
+1.  **Kullanıcının "O Anı" (Frontend):** Bu, şoförün veya kullanıcının "İşlemler" sayfasını açtığı, müşteriyi seçtiği ve ürün listesinin yüklendiği andır. Frontend, bu anda `getCustomerProductAssignments`'ı çağırır ve backend o anki kurallara göre `finalUnitPrice`'ları hesaplayıp gönderir. Kullanıcı, ekranda bu fiyatları görür, adetleri girer ve özet panelinde (kaldırmadan önce) bu fiyatlara göre hesaplanan toplamları görür. Kullanıcının kararlarını verdiği "an" budur.
+
+2.  **Kaydın "O Anı" (Backend):** Bu, kullanıcının tüm verileri girdikten sonra "Kaydet ve Sonrakine Geç" butonuna bastığı andır. Bu an, bir önceki andan saniyeler, dakikalar veya (kullanıcı ekranı açık bırakıp gittiyse) saatler sonra olabilir. Backend, `createTransaction` isteğini bu anda alır.
+
+### Risk Senaryosu
+
+Bu iki "an" arasındaki zaman farkında neler olabilir?
+
+*   **Saat 10:00:00 (Kullanıcının "O Anı"):** Şoför, Müşteri A'yı seçer. Frontend, "Süper Ekmek" için `finalUnitPrice`'ın **10.00 TL** olduğunu backend'den öğrenir. Şoför, satış alanına "5" yazar.
+*   **Saat 10:01:00:** Yönetici, merkez ofisten "Süper Ekmek"in liste fiyatını **12.00 TL** olarak günceller. Veritabanındaki `products` tablosu anında değişir.
+*   **Saat 10:02:00 (Kaydın "O Anı"):** Şoför, diğer ürünleri de girdikten sonra "Kaydet" butonuna basar.
+    *   **Eski Sistemde Ne Olurdu:** Frontend, backend'e `{ productId: 'super-ekmek', quantity: 5 }` gönderir. Backend isteği aldığında, `products` tablosuna bakar, "Süper Ekmek"in **yeni fiyatını (12.00 TL)** görür, bu fiyata göre hesaplama yapar ve işlemi `unitPrice: 12.00`, `totalPrice: 60.00` olarak kaydeder.
+    *   **Tutarsızlık:** Şoför, işlemi 10 TL'den yaptığını sanarken, sistem işlemi 12 TL'den kaydetti. Müşterinin borcu beklenenden 10 TL fazla arttı. Kasa ve bakiye tutarsız hale geldi.
+
+### Yaptığımız Değişikliğin Çözümü
+
+Yeni sistemde, bu senaryo şu şekilde işler:
+
+*   **Saat 10:02:00 (Kaydın "O Anı"):** Şoför "Kaydet" butonuna basar.
+    *   **Yeni Sistemde Ne Olur:** Frontend, backend'e `{ productId: 'super-ekmek', quantity: 5, unitPrice: 10.00 }` gönderir. (Çünkü `unitPrice`'ı sayfa yüklendiğinde state'e kaydetmiştik).
+    *   Backend, isteği aldığında fiyat hesaplaması yapmaz. Gelen `unitPrice: 10.00` değerini **doğrudan alır** ve işlemi `unitPrice: 10.00`, `totalPrice: 50.00` olarak kaydeder.
+
+**Sonuç:** İşlem, kullanıcının gördüğü ve onayladığı fiyattan kaydedilir. Finansal bütünlük %100 korunur.
+
+**Özetle:**
+
+Evet, backend zaten bir fotoğraf çekiyordu, ama **yanlış zamanda** (kayıt anında) fotoğraf çekiyordu. Bizim yaptığımız değişiklik, fotoğrafın **doğru zamanda** (kullanıcının veriyi gördüğü anda) çekilmesini ve bu fotoğrafın kayıt anına kadar korunarak backend'e iletilmesini sağlamaktır. Bu, "What You See Is What You Get" (Ne Görüyorsan Onu Alırsın) prensibini finansal işlemlere uygulamaktır ve bu tür sistemler için altın standarttır.
