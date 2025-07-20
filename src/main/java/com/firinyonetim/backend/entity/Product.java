@@ -16,17 +16,20 @@ public class Product {
     private String name;
 
     @Column(nullable = false)
-    private BigDecimal basePrice; // Bu fiyat KDV hariç mi, dahil mi? Karar verilmeli.
+    private BigDecimal basePrice; // kdv dahil fiyatı
 
-    // YENİ EKLENEN ALANLAR
     @Column(nullable = false)
-    private Integer vatRate; // Vergi Oranı (KDV), örn: 1, 10, 20 gibi tam sayı
+    private Integer vatRate;
 
-    private String productGroup; // Ürün Grubu, örn: "Ekmekler", "Pastalar"
+    // DEĞİŞİKLİK: String yerine ProductGroup entity'sine referans
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_group_id")
+    private ProductGroup productGroup;
 
-    private String unit; // Birim, örn: "Adet", "Kg", "Paket"
+    // DEĞİŞİKLİK: String yerine Unit entity'sine referans
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "unit_id")
+    private Unit unit;
 
-    private Integer grammage; // Gramaj, örn: 250, 1000
-
-
+    private Integer grammage;
 }

@@ -21,12 +21,13 @@ public class ProductUpdateRequest {
     @PositiveOrZero(message = "KDV oranı 0 veya daha büyük olmalıdır.")
     private Integer vatRate;
 
-    private String productGroup;
+    // DEĞİŞİKLİK: String yerine ID
+    private Long productGroupId;
 
-    @NotBlank(message = "Birim boş olamaz.")
-    private String unit;
+    // DEĞİŞİKLİK: String yerine ID
+    @NotNull(message = "Birim seçilmelidir.")
+    private Long unitId;
 
     @Positive(message = "Gramaj pozitif bir değer olmalıdır.")
     private Integer grammage;
-
 }

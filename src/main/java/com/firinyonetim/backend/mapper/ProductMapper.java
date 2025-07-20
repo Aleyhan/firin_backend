@@ -11,12 +11,20 @@ import org.mapstruct.MappingTarget;
 @Mapper(componentModel = "spring")
 public interface ProductMapper {
 
+    // Servis katmanı ID'lerden entity'leri bulacağı için mapper'da ignore ediyoruz.
+    @Mapping(target = "productGroup", ignore = true)
+    @Mapping(target = "unit", ignore = true)
     Product toProduct(ProductCreateRequest request);
 
+    // Entity'den DTO'ya dönüşüm
+    @Mapping(source = "productGroup.id", target = "productGroupId")
+    @Mapping(source = "productGroup.name", target = "productGroupName")
+    @Mapping(source = "unit.id", target = "unitId")
+    @Mapping(source = "unit.name", target = "unitName")
     ProductResponse toProductResponse(Product product);
 
-    // DEĞİŞİKLİK BURADA: Kaynak ve hedef özellik adları artık aynı ("active") olduğu için,
-    // manuel @Mapping anotasyonunu tamamen kaldırıyoruz.
-    // MapStruct, "active" -> "active" eşleştirmesini otomatik yapacaktır.
+    // Servis katmanı ID'lerden entity'leri bulacağı için mapper'da ignore ediyoruz.
+    @Mapping(target = "productGroup", ignore = true)
+    @Mapping(target = "unit", ignore = true)
     void updateProductFromDto(ProductUpdateRequest dto, @MappingTarget Product product);
 }

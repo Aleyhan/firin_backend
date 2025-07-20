@@ -19,13 +19,15 @@ public class ProductCreateRequest {
 
     @NotNull(message = "KDV oranı boş olamaz.")
     @PositiveOrZero(message = "KDV oranı 0 veya daha büyük olmalıdır.")
-    private Integer vatRate; // Vergi Oranı (KDV)
+    private Integer vatRate;
 
-    private String productGroup; // Ürün Grubu (isteğe bağlı)
+    // DEĞİŞİKLİK: String yerine ID
+    private Long productGroupId;
 
-    @NotBlank(message = "Birim boş olamaz.")
-    private String unit; // Birim (Adet, Kg, Paket vb.)
+    // DEĞİŞİKLİK: String yerine ID
+    @NotNull(message = "Birim seçilmelidir.")
+    private Long unitId;
 
     @Positive(message = "Gramaj pozitif bir değer olmalıdır.")
-    private Integer grammage; // Gramaj (isteğe bağlı, örn: Kg için null olabilir)
+    private Integer grammage;
 }

@@ -9,8 +9,10 @@ public class ProductResponse {
     private String name;
     private BigDecimal basePrice;
     private Integer vatRate;
-    private String productGroup;
-    private String unit;
+    // DEĞİŞİKLİK: Hem ID hem de isim eklendi
+    private Long productGroupId;
+    private String productGroupName;
+    private Long unitId;
+    private String unitName;
     private Integer grammage;
-
 }
