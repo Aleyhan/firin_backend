@@ -8,6 +8,7 @@ import com.firinyonetim.backend.service.CustomerService;
 import com.firinyonetim.backend.service.TransactionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -15,6 +16,8 @@ import org.springframework.web.bind.annotation.*;
 
 import org.springframework.web.bind.annotation.GetMapping; // GetMapping import'u
 import org.springframework.web.bind.annotation.PathVariable; // PathVariable import'u
+
+import java.time.LocalDate;
 import java.util.List; // List import'u
 import org.springframework.web.bind.annotation.PostMapping; // PostMapping import'u
 import org.springframework.web.bind.annotation.PutMapping; // PutMapping import'u
@@ -64,6 +67,17 @@ public class TransactionController {
             @PathVariable Long transactionId,
             @Valid @RequestBody TransactionUpdateRequest request) {
         return ResponseEntity.ok(transactionService.updateTransaction(transactionId, request));
+    }
+
+    // YENİ ENDPOINT
+    @GetMapping("/search")
+    public ResponseEntity<List<TransactionResponse>> searchTransactions(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) Long customerId,
+            @RequestParam(required = false) Long routeId) {
+        List<TransactionResponse> results = transactionService.searchTransactions(startDate, endDate, customerId, routeId);
+        return ResponseEntity.ok(results);
     }
 
 

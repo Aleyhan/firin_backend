@@ -9,12 +9,15 @@ import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.mapper.TransactionMapper;
 import com.firinyonetim.backend.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 
+
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -321,6 +324,40 @@ public class TransactionService {
         Transaction updatedTransaction = transactionRepository.save(transaction);
 
         return transactionMapper.toTransactionResponse(updatedTransaction);
+    }
+
+    // YENİ METOT
+    @Transactional(readOnly = true)
+    public List<TransactionResponse> searchTransactions(LocalDate startDate, LocalDate endDate, Long customerId, Long routeId) {
+        Specification<Transaction> spec = Specification.where(null);
+
+        if (startDate != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.greaterThanOrEqualTo(root.get("transactionDate"), startDate.atStartOfDay()));
+        }
+
+        if (endDate != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.lessThanOrEqualTo(root.get("transactionDate"), endDate.atTime(23, 59, 59)));
+        }
+
+        if (customerId != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.equal(root.get("customer").get("id"), customerId));
+        }
+
+        if (routeId != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.equal(root.get("route").get("id"), routeId));
+        }
+
+        // N+1 problemini önlemek için EntityGraph veya JOIN FETCH ile sorguyu optimize etmek daha iyi olabilir,
+        // ancak şimdilik bu şekilde başlayalım.
+        List<Transaction> transactions = transactionRepository.findAll(spec);
+
+        return transactions.stream()
+                .map(transactionMapper::toTransactionResponse)
+                .collect(Collectors.toList());
     }
 
 
