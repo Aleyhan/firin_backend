@@ -371,25 +371,37 @@ public class TransactionService {
     }
 
     @Transactional(readOnly = true)
-    public List<TransactionResponse> searchTransactions(LocalDate startDate, LocalDate endDate, Long customerId, Long routeId) {
+    public List<TransactionResponse> searchTransactions(LocalDate startDate, LocalDate endDate, Long customerId, Long routeId, TransactionStatus status) {
         Specification<Transaction> spec = Specification.where(null);
+
         if (startDate != null) {
             spec = spec.and((root, query, criteriaBuilder) ->
                     criteriaBuilder.greaterThanOrEqualTo(root.get("transactionDate"), startDate.atStartOfDay()));
         }
+
         if (endDate != null) {
             spec = spec.and((root, query, criteriaBuilder) ->
                     criteriaBuilder.lessThanOrEqualTo(root.get("transactionDate"), endDate.atTime(23, 59, 59)));
         }
+
         if (customerId != null) {
             spec = spec.and((root, query, criteriaBuilder) ->
                     criteriaBuilder.equal(root.get("customer").get("id"), customerId));
         }
+
         if (routeId != null) {
             spec = spec.and((root, query, criteriaBuilder) ->
                     criteriaBuilder.equal(root.get("route").get("id"), routeId));
         }
+
+        // YENİ FİLTRELEME KOŞULU
+        if (status != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.equal(root.get("status"), status));
+        }
+
         List<Transaction> transactions = transactionRepository.findAll(spec);
+
         return transactions.stream()
                 .map(transactionMapper::toTransactionResponse)
                 .collect(Collectors.toList());

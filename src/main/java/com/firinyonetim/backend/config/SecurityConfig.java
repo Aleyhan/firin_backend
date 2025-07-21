@@ -4,6 +4,7 @@ import com.firinyonetim.backend.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -49,10 +50,10 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**", "/api/health").permitAll()
-                        // YENİ GÜVENLİK KURALLARI
                         .requestMatchers("/api/driver/**").hasRole("SOFOR")
                         .requestMatchers("/api/admin/**").hasRole("YONETICI")
-                        // YÖNETİCİ TÜM DİĞER ENDPOINT'LERE ERİŞEBİLİR
+                        .requestMatchers(HttpMethod.GET, "/api/routes/{id}").hasAnyRole("YONETICI", "DEVELOPER", "SOFOR")
+                        .requestMatchers(HttpMethod.GET, "/api/customers/{id}/products").hasAnyRole("YONETICI", "DEVELOPER", "SOFOR")
                         .anyRequest().hasAnyRole("YONETICI", "DEVELOPER")
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -64,7 +65,8 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:5178"));
+        // DEĞİŞİKLİK BURADA: Yeni adres listeye eklendi.
+        configuration.setAllowedOrigins(Arrays.asList("http://localhost:5178", "http://192.168.1.107:5178"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type"));
         configuration.setAllowCredentials(true);

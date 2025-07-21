@@ -171,7 +171,7 @@ public class CustomerController {
 
     // YENİ ENDPOINT: Bir müşteriye atanmış tüm ürünleri ve kurallarını listeler.
     @GetMapping("/{customerId}/products")
-    @PreAuthorize("hasRole('YONETICI')")
+    @PreAuthorize("hasRole('YONETICI') or hasRole('SOFOR')")
     public ResponseEntity<List<CustomerProductAssignmentResponse>> getCustomerProductAssignments(@PathVariable Long customerId) {
         return ResponseEntity.ok(customerService.getCustomerProductAssignments(customerId));
     }

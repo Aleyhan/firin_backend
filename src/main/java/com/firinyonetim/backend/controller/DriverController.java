@@ -23,22 +23,17 @@ import java.util.List;
 @RequiredArgsConstructor
 public class DriverController {
 
-    private final RouteRepository routeRepository;
     private final RouteService routeService;
     private final TransactionService transactionService;
 
+    // DEĞİŞİKLİK: Artık repository yerine RouteService'i çağırıyor.
     @GetMapping("/my-routes")
     public ResponseEntity<List<RouteResponse>> getMyRoutes(@AuthenticationPrincipal User driver) {
-        return ResponseEntity.ok(routeRepository.findByDriverIdAndIsActiveTrue(driver.getId())
-                .stream()
-                .map(route -> routeService.routeMapper.toRouteResponse(route))
-                .toList());
+        return ResponseEntity.ok(routeService.getDriverRoutes(driver.getId()));
     }
 
     @GetMapping("/routes/{routeId}/customers")
     public ResponseEntity<List<CustomerResponse>> getCustomersForRoute(@PathVariable Long routeId) {
-        // Güvenlik kontrolü: Şoförün bu rotaya atanıp atanmadığı kontrol edilebilir.
-        // Şimdilik basit tutuyoruz.
         return ResponseEntity.ok(routeService.getCustomersByRoute(routeId));
     }
 

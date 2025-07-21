@@ -41,8 +41,8 @@ public class RouteService {
     private final RouteRepository routeRepository;
     private final RouteAssignmentRepository routeAssignmentRepository;
     private final CustomerRepository customerRepository;
-    private final UserRepository userRepository; // YENİ
-    public final RouteMapper routeMapper;
+    private final UserRepository userRepository;
+    private final RouteMapper routeMapper;
     private final CustomerMapper customerMapper;
     private final TransactionRepository transactionRepository;
     private static final Logger logger = LoggerFactory.getLogger(RouteService.class);
@@ -55,7 +55,6 @@ public class RouteService {
 
         Route route = routeMapper.toRoute(request);
 
-        // YENİ: Şoför atama mantığı
         if (request.getDriverId() != null) {
             User driver = userRepository.findById(request.getDriverId())
                     .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + request.getDriverId()));
@@ -161,7 +160,6 @@ public class RouteService {
 
         routeMapper.updateRouteFromDto(request, route);
 
-        // YENİ: Şoför atama mantığı
         if (request.getDriverId() != null) {
             User driver = userRepository.findById(request.getDriverId())
                     .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + request.getDriverId()));
@@ -170,7 +168,7 @@ public class RouteService {
             }
             route.setDriver(driver);
         } else {
-            route.setDriver(null); // Şoförü rotadan kaldırma
+            route.setDriver(null);
         }
 
         Route savedRoute = routeRepository.save(route);
@@ -356,7 +354,6 @@ public class RouteService {
         return new ArrayList<>(summaryMap.values());
     }
 
-    // YENİ METOT: Teslimat sırasını güncellemek için
     @Transactional
     public void updateDeliveryOrder(Long routeId, List<Long> orderedCustomerIds) {
         List<RouteAssignment> assignments = routeAssignmentRepository.findByRouteIdOrderByDeliveryOrderAsc(routeId);
@@ -367,9 +364,18 @@ public class RouteService {
             Long customerId = orderedCustomerIds.get(i);
             RouteAssignment assignment = assignmentMap.get(customerId);
             if (assignment != null) {
-                assignment.setDeliveryOrder(i + 1); // Sıra 1'den başlar
+                assignment.setDeliveryOrder(i + 1);
             }
         }
         routeAssignmentRepository.saveAll(assignments);
+    }
+
+    // YENİ METOT
+    @Transactional(readOnly = true)
+    public List<RouteResponse> getDriverRoutes(Long driverId) {
+        return routeRepository.findByDriverIdAndIsActiveTrue(driverId)
+                .stream()
+                .map(routeMapper::toRouteResponse)
+                .collect(Collectors.toList());
     }
 }

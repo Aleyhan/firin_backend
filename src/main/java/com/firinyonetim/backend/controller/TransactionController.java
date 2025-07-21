@@ -4,6 +4,7 @@ import com.firinyonetim.backend.dto.transaction.request.TransactionCreateRequest
 import com.firinyonetim.backend.dto.transaction.request.TransactionItemPriceUpdateRequest;
 import com.firinyonetim.backend.dto.transaction.request.TransactionUpdateRequest;
 import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
+import com.firinyonetim.backend.entity.TransactionStatus; // YENİ IMPORT
 import com.firinyonetim.backend.service.TransactionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,13 +20,11 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/transactions")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('YONETICI')") // Bu controller'daki tüm işlemler yönetici yetkisi gerektirir
+@PreAuthorize("hasRole('YONETICI')")
 public class TransactionController {
 
     private final TransactionService transactionService;
 
-    // DEĞİŞİKLİK: Bu metot artık işlemi direkt ONAYLANMIŞ olarak oluşturur.
-    // Yönetici tarafından girilen işlemler için kullanılır.
     @PostMapping
     public ResponseEntity<TransactionResponse> createTransaction(@Valid @RequestBody TransactionCreateRequest request) {
         return new ResponseEntity<>(transactionService.createAndApproveTransaction(request), HttpStatus.CREATED);
@@ -57,13 +56,15 @@ public class TransactionController {
         return ResponseEntity.ok(transactionService.updateTransaction(transactionId, request));
     }
 
+    // METOT İMZASI GÜNCELLENDİ
     @GetMapping("/search")
     public ResponseEntity<List<TransactionResponse>> searchTransactions(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(required = false) Long customerId,
-            @RequestParam(required = false) Long routeId) {
-        List<TransactionResponse> results = transactionService.searchTransactions(startDate, endDate, customerId, routeId);
+            @RequestParam(required = false) Long routeId,
+            @RequestParam(required = false) TransactionStatus status) { // YENİ PARAMETRE
+        List<TransactionResponse> results = transactionService.searchTransactions(startDate, endDate, customerId, routeId, status);
         return ResponseEntity.ok(results);
     }
 }
