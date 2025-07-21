@@ -45,11 +45,15 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // BU SATIRI EKLEYİN
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**", "/api/health").permitAll()
-                        .anyRequest().authenticated()
+                        // YENİ GÜVENLİK KURALLARI
+                        .requestMatchers("/api/driver/**").hasRole("SOFOR")
+                        .requestMatchers("/api/admin/**").hasRole("YONETICI")
+                        // YÖNETİCİ TÜM DİĞER ENDPOINT'LERE ERİŞEBİLİR
+                        .anyRequest().hasAnyRole("YONETICI", "DEVELOPER")
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -57,11 +61,9 @@ public class SecurityConfig {
         return http.build();
     }
 
-    // SecurityConfig sınıfının içine bu Bean'i ekleyin:
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Frontend adresiniz. Birden fazla olabilir.
         configuration.setAllowedOrigins(Arrays.asList("http://localhost:5178"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type"));

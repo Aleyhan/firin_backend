@@ -23,9 +23,8 @@ public class Transaction {
     @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
 
-    // YENİ EKLENEN ALAN
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "route_id", nullable = true) // Başlangıçta null olabilir, şoförsüz işlemler için
+    @JoinColumn(name = "route_id", nullable = true)
     private Route route;
 
     @Column(nullable = false)
@@ -37,14 +36,22 @@ public class Transaction {
     @JoinColumn(name = "created_by_user_id", nullable = false)
     private User createdBy;
 
-    // Lombok'un Set ile ilgili sonsuz döngüye girmesini önlemek için
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    @OneToMany(mappedBy = "transaction", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<TransactionItem> items = new HashSet<>(); // List -> Set, ArrayList -> HashSet
+    // YENİ ALANLAR
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private TransactionStatus status = TransactionStatus.PENDING; // Varsayılan olarak PENDING
+
+    @Column(columnDefinition = "TEXT")
+    private String rejectionReason;
+    // YENİ ALANLAR SONU
 
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     @OneToMany(mappedBy = "transaction", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<TransactionPayment> payments = new HashSet<>(); // List -> Set, ArrayList -> HashSet
+    private Set<TransactionItem> items = new HashSet<>();
+
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @OneToMany(mappedBy = "transaction", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<TransactionPayment> payments = new HashSet<>();
 }

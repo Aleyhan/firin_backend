@@ -1,5 +1,6 @@
 package com.firinyonetim.backend.dto.transaction.response;
 
+import com.firinyonetim.backend.entity.TransactionStatus;
 import lombok.Data;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -8,7 +9,7 @@ import java.util.List;
 public class TransactionResponse {
     private Long id;
     private Long customerId;
-    private String customerCode; // YENİ ALAN
+    private String customerCode;
     private String customerName;
     private Long routeId;
     private String routeName;
@@ -18,4 +19,8 @@ public class TransactionResponse {
     private String createdByUsername;
     private List<TransactionItemResponse> items;
     private List<TransactionPaymentResponse> payments;
+
+    // YENİ ALANLAR
+    private TransactionStatus status;
+    private String rejectionReason;
 }

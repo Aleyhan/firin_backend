@@ -1,6 +1,7 @@
 package com.firinyonetim.backend.repository;
 
 import com.firinyonetim.backend.entity.Transaction;
+import com.firinyonetim.backend.entity.TransactionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -26,7 +27,6 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             "WHERE t.id = :transactionId")
     Optional<Transaction> findByIdWithDetails(Long transactionId);
 
-    // DEĞİŞİKLİK: Sorgu güncellendi.
     @Query("SELECT t FROM Transaction t " +
             "JOIN FETCH t.customer " +
             "JOIN FETCH t.createdBy " +
@@ -49,4 +49,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             "LEFT JOIN FETCH t.payments " +
             "ORDER BY t.transactionDate DESC LIMIT 10")
     List<Transaction> findTop10ByOrderByTransactionDateDesc();
+
+    // YENİ METOT: Onay bekleyen işlemleri getirir
+    List<Transaction> findByStatusOrderByTransactionDateAsc(TransactionStatus status);
 }

@@ -4,7 +4,6 @@ import com.firinyonetim.backend.dto.transaction.request.TransactionCreateRequest
 import com.firinyonetim.backend.dto.transaction.request.TransactionItemPriceUpdateRequest;
 import com.firinyonetim.backend.dto.transaction.request.TransactionUpdateRequest;
 import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
-import com.firinyonetim.backend.service.CustomerService;
 import com.firinyonetim.backend.service.TransactionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -14,31 +13,23 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import org.springframework.web.bind.annotation.GetMapping; // GetMapping import'u
-import org.springframework.web.bind.annotation.PathVariable; // PathVariable import'u
-
 import java.time.LocalDate;
-import java.util.List; // List import'u
-import org.springframework.web.bind.annotation.PostMapping; // PostMapping import'u
-import org.springframework.web.bind.annotation.PutMapping; // PutMapping import'u
-import org.springframework.web.bind.annotation.DeleteMapping; // DeleteMapping import'u
-import org.springframework.web.bind.annotation.RequestBody; // RequestBody import'u
-import org.springframework.web.bind.annotation.RequestMapping; // RequestMapping import'u
-import org.springframework.web.bind.annotation.PatchMapping;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/transactions")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('YONETICI')")
+@PreAuthorize("hasRole('YONETICI')") // Bu controller'daki tüm işlemler yönetici yetkisi gerektirir
 public class TransactionController {
 
     private final TransactionService transactionService;
 
+    // DEĞİŞİKLİK: Bu metot artık işlemi direkt ONAYLANMIŞ olarak oluşturur.
+    // Yönetici tarafından girilen işlemler için kullanılır.
     @PostMapping
     public ResponseEntity<TransactionResponse> createTransaction(@Valid @RequestBody TransactionCreateRequest request) {
-        return new ResponseEntity<>(transactionService.createTransaction(request), HttpStatus.CREATED);
+        return new ResponseEntity<>(transactionService.createAndApproveTransaction(request), HttpStatus.CREATED);
     }
-
 
     @DeleteMapping("/{transactionId}")
     public ResponseEntity<Void> deleteTransaction(@PathVariable Long transactionId) {
@@ -51,8 +42,6 @@ public class TransactionController {
         return ResponseEntity.ok(transactionService.getTransactionById(transactionId));
     }
 
-    // ... TransactionController sınıfının içinde ...
-
     @PatchMapping("/{transactionId}/items/{itemId}/price")
     public ResponseEntity<TransactionResponse> updateTransactionItemPrice(
             @PathVariable Long transactionId,
@@ -61,7 +50,6 @@ public class TransactionController {
         return ResponseEntity.ok(transactionService.updateTransactionItemPrice(transactionId, itemId, request));
     }
 
-    // YENİ ENDPOINT
     @PutMapping("/{transactionId}")
     public ResponseEntity<TransactionResponse> updateTransaction(
             @PathVariable Long transactionId,
@@ -69,7 +57,6 @@ public class TransactionController {
         return ResponseEntity.ok(transactionService.updateTransaction(transactionId, request));
     }
 
-    // YENİ ENDPOINT
     @GetMapping("/search")
     public ResponseEntity<List<TransactionResponse>> searchTransactions(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -79,6 +66,4 @@ public class TransactionController {
         List<TransactionResponse> results = transactionService.searchTransactions(startDate, endDate, customerId, routeId);
         return ResponseEntity.ok(results);
     }
-
-
 }

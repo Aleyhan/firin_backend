@@ -16,30 +16,29 @@ public class Route {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // YENİ ALAN
     @Column(unique = true, nullable = false, length = 4)
     private String routeCode;
 
     @Column(nullable = false, unique = true)
     private String name;
 
-    // YENİ ALAN
-    @Column(columnDefinition = "TEXT") // Açıklamanın uzun olabilmesi için TEXT tipini kullanmak iyi bir pratiktir.
+    @Column(columnDefinition = "TEXT")
     private String description;
 
-    // YENİ ALAN
     @Column(nullable = false)
-    private boolean isActive = true; // Varsayılan olarak her yeni rota aktif olsun.
+    private boolean isActive = true;
 
-    // PLAKA ALANI (opsiyonel)
     @Column(nullable = true, length = 20)
     private String plaka;
 
+    // YENİ ALAN: Rotadan sorumlu şoför
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "driver_id")
+    private User driver;
+    // YENİ ALAN SONU
 
-    // Bir rotanın hangi müşterileri içerdiğini görmek için
-    // Bir rotanın hangi müşterileri içerdiğini görmek için
     @OneToMany(mappedBy = "route", cascade = CascadeType.ALL, orphanRemoval = true)
-    @ToString.Exclude // YENİ ANOTASYON
-    @EqualsAndHashCode.Exclude // YENİ ANOTASYON (İyi bir pratiktir)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Set<RouteAssignment> assignments = new HashSet<>();
 }

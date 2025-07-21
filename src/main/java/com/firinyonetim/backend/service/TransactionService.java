@@ -10,11 +10,10 @@ import com.firinyonetim.backend.mapper.TransactionMapper;
 import com.firinyonetim.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -35,28 +34,35 @@ public class TransactionService {
     private final TransactionItemRepository transactionItemRepository;
     private final CustomerProductAssignmentRepository customerProductAssignmentRepository;
 
-
-
-
-// TransactionService.java içinde...
-
+    // YÖNETİCİ İÇİN MEVCUT METOT: Bu metot işlemi oluşturur ve anında ONAYLAR.
     @Transactional
-    public TransactionResponse createTransaction(TransactionCreateRequest request) {
-        // 1. Gerekli Varlıkları Bul (Bu kısım aynı)
+    public TransactionResponse createAndApproveTransaction(TransactionCreateRequest request) {
+        Transaction transaction = createTransactionInternal(request, true); // Bakiye güncellenecek
+        transaction.setStatus(TransactionStatus.APPROVED); // Durumu ONAYLANDI yap
+        Transaction savedTransaction = transactionRepository.save(transaction);
+        return transactionMapper.toTransactionResponse(savedTransaction);
+    }
+
+    // ŞOFÖR İÇİN YENİ METOT: Bu metot işlemi oluşturur ama ONAY BEKLİYOR olarak bırakır.
+    @Transactional
+    public TransactionResponse createPendingTransaction(TransactionCreateRequest request) {
+        Transaction transaction = createTransactionInternal(request, false); // Bakiye GÜNCELLENMEYECEK
+        transaction.setStatus(TransactionStatus.PENDING); // Durumu ONAY BEKLİYOR yap
+        Transaction savedTransaction = transactionRepository.save(transaction);
+        return transactionMapper.toTransactionResponse(savedTransaction);
+    }
+
+    // ORTAK İŞLEM OLUŞTURMA MANTIĞI
+    private Transaction createTransactionInternal(TransactionCreateRequest request, boolean updateBalance) {
         Customer customer = customerRepository.findById(request.getCustomerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + request.getCustomerId()));
         User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
 
-        // 2. Ana Transaction Nesnesini Oluştur (Bu kısım aynı)
         Transaction transaction = new Transaction();
         transaction.setCustomer(customer);
         transaction.setCreatedBy(currentUser);
         transaction.setNotes(request.getNotes());
 
-
-        // DEĞİŞİKLİK: Tarihi request'ten alıyoruz.
-        // Eğer tarih gelmezse, güvenlik önlemi olarak bugünün tarihini kullan.
-        // Günün başlangıcı olarak (00:00) kaydediyoruz.
         if (request.getTransactionDate() != null) {
             transaction.setTransactionDate(request.getTransactionDate().atStartOfDay());
         } else {
@@ -69,64 +75,36 @@ public class TransactionService {
             transaction.setRoute(route);
         }
 
-        if (request.getRouteId() != null) {
-            Route route = routeRepository.findById(request.getRouteId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + request.getRouteId()));
-            transaction.setRoute(route);
-        }
-
         BigDecimal balanceChange = BigDecimal.ZERO;
 
-        // 3. İşlem Kalemlerini (Satış/İade) İşle (<<< DEĞİŞİKLİK: Bu döngünün içi tamamen değişiyor)
         if (request.getItems() != null) {
             for (var itemRequest : request.getItems()) {
                 Product product = productRepository.findById(itemRequest.getProductId())
                         .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + itemRequest.getProductId()));
 
-                // 1. Müşteri-Ürün atamasını ve kurallarını al.
                 CustomerProductAssignment assignment = customerProductAssignmentRepository
                         .findByCustomerIdAndProductId(customer.getId(), product.getId())
-                        .orElseThrow(() -> new IllegalStateException(
-                                "Ürün '" + product.getName() + "' bu müşteriye atanmamış. İşlem yapılamaz."
-                        ));
+                        .orElseThrow(() -> new IllegalStateException("Ürün '" + product.getName() + "' bu müşteriye atanmamış."));
 
-                // 2. Uygulanacak ham fiyatı belirle (Özel fiyat veya standart fiyat).
-                BigDecimal basePrice;
-                if (assignment.getSpecialPrice() != null) {
-                    basePrice = assignment.getSpecialPrice(); // Özel fiyat varsa onu kullan.
-                } else {
-                    basePrice = product.getBasePrice(); // Yoksa ürünün standart fiyatını kullan.
-                }
-
-                // 3. KDV kuralına göre nihai birim satış fiyatını hesapla.
+                BigDecimal basePrice = (assignment.getSpecialPrice() != null) ? assignment.getSpecialPrice() : product.getBasePrice();
                 BigDecimal finalUnitPrice;
                 if (assignment.getPricingType() == PricingType.VAT_INCLUDED) {
-                    // Fiyat zaten KDV dahil, olduğu gibi al.
                     finalUnitPrice = basePrice;
-                } else { // VAT_EXCLUSIVE
-                    // Fiyata ürünün KDV'sini ekle.
-                    if (product.getVatRate() == null || product.getVatRate() < 0) {
-                        throw new IllegalStateException("Ürün '" + product.getName() + "' için geçerli bir KDV oranı tanımlanmamış.");
-                    }
+                } else {
                     BigDecimal vatRate = BigDecimal.valueOf(product.getVatRate()).divide(new BigDecimal("100"));
-                    BigDecimal vatAmount = basePrice.multiply(vatRate);
-                    finalUnitPrice = basePrice.add(vatAmount);
+                    finalUnitPrice = basePrice.add(basePrice.multiply(vatRate));
                 }
 
-                // 4. TransactionItem'ı bu nihai "fotoğrafı çekilmiş" fiyatla oluştur.
                 BigDecimal totalPrice = finalUnitPrice.multiply(BigDecimal.valueOf(itemRequest.getQuantity()));
-
                 TransactionItem item = new TransactionItem();
                 item.setProduct(product);
                 item.setQuantity(itemRequest.getQuantity());
                 item.setType(itemRequest.getType());
-                item.setUnitPrice(finalUnitPrice); // <<< ÖNEMLİ: Nihai fiyatı kaydet
+                item.setUnitPrice(finalUnitPrice);
                 item.setTotalPrice(totalPrice);
-
                 item.setTransaction(transaction);
                 transaction.getItems().add(item);
 
-                // Bakiye değişikliğini hesapla (Bu kısım aynı)
                 if (itemRequest.getType() == ItemType.SATIS) {
                     balanceChange = balanceChange.add(totalPrice);
                 } else if (itemRequest.getType() == ItemType.IADE) {
@@ -135,7 +113,6 @@ public class TransactionService {
             }
         }
 
-        // 4. Tahsilatları İşle (Bu kısım aynı)
         if (request.getPayments() != null) {
             for (var paymentRequest : request.getPayments()) {
                 TransactionPayment payment = new TransactionPayment();
@@ -143,156 +120,89 @@ public class TransactionService {
                 payment.setType(paymentRequest.getType());
                 payment.setTransaction(transaction);
                 transaction.getPayments().add(payment);
-                // Tahsilat bakiyeden düşülür
                 balanceChange = balanceChange.subtract(paymentRequest.getAmount());
             }
         }
 
-        // 5. Müşteri Bakiyesini Güncelle (Bu kısım aynı)
+        if (updateBalance) {
+            customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().add(balanceChange));
+            customerRepository.save(customer);
+        }
+
+        return transaction;
+    }
+
+    // YENİ METOT: İşlemi Onaylama
+    @Transactional
+    public TransactionResponse approveTransaction(Long transactionId) {
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
+
+        if (transaction.getStatus() != TransactionStatus.PENDING) {
+            throw new IllegalStateException("Sadece onay bekleyen işlemler onaylanabilir.");
+        }
+
+        transaction.setStatus(TransactionStatus.APPROVED);
+
+        // Bakiye güncellemesini SADECE bu aşamada yap
+        BigDecimal balanceChange = calculateBalanceChange(transaction);
+        Customer customer = transaction.getCustomer();
         customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().add(balanceChange));
         customerRepository.save(customer);
 
-        // 6. Transaction'ı Kaydet (Bu kısım aynı)
         Transaction savedTransaction = transactionRepository.save(transaction);
-
         return transactionMapper.toTransactionResponse(savedTransaction);
     }
 
-    public List<TransactionResponse> getTransactionsByCustomerId(Long customerId) {
-        // Müşterinin var olup olmadığını kontrol et (isteğe bağlı ama iyi bir pratik)
-        if (!customerRepository.existsById(customerId)) {
-            throw new ResourceNotFoundException("Customer not found with id: " + customerId);
+    // YENİ METOT: İşlemi Reddetme
+    @Transactional
+    public TransactionResponse rejectTransaction(Long transactionId, String reason) {
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
+
+        if (transaction.getStatus() != TransactionStatus.PENDING) {
+            throw new IllegalStateException("Sadece onay bekleyen işlemler reddedilebilir.");
         }
 
-        // Repository'den müşterinin tüm işlemlerini çek
-        List<Transaction> transactions = transactionRepository.findByCustomerIdOrderByTransactionDateDesc(customerId);
+        transaction.setStatus(TransactionStatus.REJECTED);
+        transaction.setRejectionReason(reason);
 
-        // Çekilen entity listesini, DTO listesine çevir ve döndür
-        return transactions.stream()
+        Transaction savedTransaction = transactionRepository.save(transaction);
+        return transactionMapper.toTransactionResponse(savedTransaction);
+    }
+
+    // YENİ METOT: Onay bekleyen işlemleri listeleme
+    @Transactional(readOnly = true)
+    public List<TransactionResponse> getPendingTransactions() {
+        return transactionRepository.findByStatusOrderByTransactionDateAsc(TransactionStatus.PENDING)
+                .stream()
                 .map(transactionMapper::toTransactionResponse)
                 .collect(Collectors.toList());
     }
 
+    // YENİ METOT: Şoförün kendi bekleyen işlemini güncellemesi
     @Transactional
-    public void deleteTransaction(Long transactionId) {
-        Transaction transaction = transactionRepository.findById(transactionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
-
-        // Müşteri bakiyesini geri al
-        Customer customer = transaction.getCustomer();
-        BigDecimal balanceChange = calculateBalanceChange(transaction);
-        customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().subtract(balanceChange));
-        customerRepository.save(customer);
-
-        // Transaction'ı sil (Cascade sayesinde item ve payment'lar da silinir)
-        transactionRepository.delete(transaction);
-    }
-
-    // Bakiye değişikliğini hesaplamak için yardımcı metot
-    private BigDecimal calculateBalanceChange(Transaction transaction) {
-        BigDecimal balanceChange = BigDecimal.ZERO;
-
-        for (TransactionItem item : transaction.getItems()) {
-            if (item.getType() == ItemType.SATIS) {
-                balanceChange = balanceChange.add(item.getTotalPrice());
-            } else if (item.getType() == ItemType.IADE) {
-                balanceChange = balanceChange.subtract(item.getTotalPrice());
-            }
-        }
-
-        for (TransactionPayment payment : transaction.getPayments()) {
-            balanceChange = balanceChange.subtract(payment.getAmount());
-        }
-
-        return balanceChange;
-    }
-
-    public TransactionResponse getTransactionById(Long transactionId) {
-        // Sorguyu N+1 problemine karşı optimize etmek için EntityGraph kullanabiliriz
-        // veya repository'de özel bir @Query yazabiliriz. Şimdilik basit başlayalım.
-        Transaction transaction = transactionRepository.findById(transactionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
-
-        return transactionMapper.toTransactionResponse(transaction);
-    }
-
-    // ... TransactionService sınıfının içinde ...
-
-    @Transactional
-    public TransactionResponse updateTransactionItemPrice(Long transactionId, Long itemId, TransactionItemPriceUpdateRequest request) {
-        // 1. İlgili TransactionItem'ı (kalemi) bul.
-        // Transaction'a ait olduğundan emin olarak bulmak daha güvenlidir.
-        TransactionItem item = transactionItemRepository.findById(itemId)
-                .orElseThrow(() -> new ResourceNotFoundException("Transaction item not found with id: " + itemId));
-
-        // Güvenlik kontrolü: Bu item, gerçekten belirtilen transaction'a mı ait?
-        if (!item.getTransaction().getId().equals(transactionId)) {
-            throw new IllegalStateException("Item with id " + itemId + " does not belong to transaction with id " + transactionId);
-        }
-
-        // 2. Eski finansal etkiyi hesapla.
-        // Bu kalemin bakiye üzerindeki eski etkisi nedir?
-        BigDecimal oldItemBalanceChange = BigDecimal.ZERO;
-        if (item.getType() == ItemType.SATIS) {
-            oldItemBalanceChange = item.getTotalPrice(); // Satış ise borcu artırmıştı
-        } else if (item.getType() == ItemType.IADE) {
-            oldItemBalanceChange = item.getTotalPrice().negate(); // İade ise borcu azaltmıştı (negatif etki)
-        }
-
-        // 3. Kalemin fiyatını ve toplam fiyatını güncelle.
-        BigDecimal newUnitPrice = request.getNewUnitPrice();
-        item.setUnitPrice(newUnitPrice);
-        item.setTotalPrice(newUnitPrice.multiply(BigDecimal.valueOf(item.getQuantity())));
-        transactionItemRepository.save(item); // Değişikliği kaydet
-
-        // 4. Yeni finansal etkiyi hesapla.
-        BigDecimal newItemBalanceChange = BigDecimal.ZERO;
-        if (item.getType() == ItemType.SATIS) {
-            newItemBalanceChange = item.getTotalPrice();
-        } else if (item.getType() == ItemType.IADE) {
-            newItemBalanceChange = item.getTotalPrice().negate();
-        }
-
-        // 5. Müşteri bakiyesini düzelt.
-        // Önce eski etkiyi geri al, sonra yeni etkiyi ekle.
-        BigDecimal correction = newItemBalanceChange.subtract(oldItemBalanceChange);
-        Customer customer = item.getTransaction().getCustomer();
-        customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().add(correction));
-        customerRepository.save(customer);
-
-        // 6. Güncellenmiş Transaction'ın tamamını döndür.
-        // findByIdWithDetails ile tüm detayları taze bir şekilde çekiyoruz.
-        Transaction updatedTransaction = transactionRepository.findByIdWithDetails(transactionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found after update with id: " + transactionId));
-
-        return transactionMapper.toTransactionResponse(updatedTransaction);
-    }
-
-    @Transactional
-    public TransactionResponse updateTransaction(Long transactionId, TransactionUpdateRequest request) {
-        // 1. Mevcut işlemi tüm detaylarıyla bul
+    public TransactionResponse updatePendingTransaction(Long transactionId, TransactionUpdateRequest request, Long driverId) {
         Transaction transaction = transactionRepository.findByIdWithDetails(transactionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
 
-        Customer customer = transaction.getCustomer();
+        if (transaction.getStatus() != TransactionStatus.PENDING) {
+            throw new IllegalStateException("Sadece onay bekleyen işlemler güncellenebilir.");
+        }
+        if (!transaction.getCreatedBy().getId().equals(driverId)) {
+            throw new AccessDeniedException("Bu işlemi güncelleme yetkiniz yok.");
+        }
 
-        // 2. Müşteri bakiyesinden bu işlemin ESKİ etkisini GERİ AL
-        BigDecimal oldBalanceChange = calculateBalanceChange(transaction);
-        customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().subtract(oldBalanceChange));
-
-        // 3. İşlem detaylarını güncelle
+        // Bu işlem bakiye etkilemediği için, eski etkiyi geri almaya gerek yok.
         transaction.setNotes(request.getNotes());
-
-        // Mevcut item ve payment'ları temizle ve yenilerini ekle
         transaction.getItems().clear();
         transaction.getPayments().clear();
 
-        // Yeni item'ları işle
+        // Yeni item ve payment'ları ekle (bakiye güncellemesi olmadan)
         if (request.getItems() != null) {
             request.getItems().forEach(itemRequest -> {
                 Product product = productRepository.findById(itemRequest.getProductId())
                         .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + itemRequest.getProductId()));
-
                 TransactionItem newItem = new TransactionItem();
                 newItem.setProduct(product);
                 newItem.setQuantity(itemRequest.getQuantity());
@@ -303,8 +213,6 @@ public class TransactionService {
                 transaction.getItems().add(newItem);
             });
         }
-
-        // Yeni payment'ları işle
         if (request.getPayments() != null) {
             request.getPayments().forEach(paymentRequest -> {
                 TransactionPayment newPayment = new TransactionPayment();
@@ -315,51 +223,175 @@ public class TransactionService {
             });
         }
 
-        // 4. Müşteri bakiyesine bu işlemin YENİ etkisini EKLE
-        BigDecimal newBalanceChange = calculateBalanceChange(transaction);
-        customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().add(newBalanceChange));
-
-        // 5. Müşteri ve İşlem'i kaydet
-        customerRepository.save(customer);
         Transaction updatedTransaction = transactionRepository.save(transaction);
-
         return transactionMapper.toTransactionResponse(updatedTransaction);
     }
 
-    // YENİ METOT
-    @Transactional(readOnly = true)
-    public List<TransactionResponse> searchTransactions(LocalDate startDate, LocalDate endDate, Long customerId, Long routeId) {
-        Specification<Transaction> spec = Specification.where(null);
+    // YENİ METOT: Şoförün kendi bekleyen işlemini silmesi
+    @Transactional
+    public void deletePendingTransaction(Long transactionId, Long driverId) {
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
 
-        if (startDate != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.greaterThanOrEqualTo(root.get("transactionDate"), startDate.atStartOfDay()));
+        if (transaction.getStatus() != TransactionStatus.PENDING) {
+            throw new IllegalStateException("Sadece onay bekleyen işlemler silinebilir.");
+        }
+        if (!transaction.getCreatedBy().getId().equals(driverId)) {
+            throw new AccessDeniedException("Bu işlemi silme yetkiniz yok.");
         }
 
-        if (endDate != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.lessThanOrEqualTo(root.get("transactionDate"), endDate.atTime(23, 59, 59)));
+        transactionRepository.delete(transaction);
+    }
+
+    // --- MEVCUT METOTLAR (DEĞİŞİKLİK YOK) ---
+    public List<TransactionResponse> getTransactionsByCustomerId(Long customerId) {
+        if (!customerRepository.existsById(customerId)) {
+            throw new ResourceNotFoundException("Customer not found with id: " + customerId);
         }
-
-        if (customerId != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("customer").get("id"), customerId));
-        }
-
-        if (routeId != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("route").get("id"), routeId));
-        }
-
-        // N+1 problemini önlemek için EntityGraph veya JOIN FETCH ile sorguyu optimize etmek daha iyi olabilir,
-        // ancak şimdilik bu şekilde başlayalım.
-        List<Transaction> transactions = transactionRepository.findAll(spec);
-
+        List<Transaction> transactions = transactionRepository.findByCustomerIdOrderByTransactionDateDesc(customerId);
         return transactions.stream()
                 .map(transactionMapper::toTransactionResponse)
                 .collect(Collectors.toList());
     }
 
+    @Transactional
+    public void deleteTransaction(Long transactionId) {
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
 
+        // Sadece onaylanmış bir işlem siliniyorsa bakiyeyi geri al
+        if (transaction.getStatus() == TransactionStatus.APPROVED) {
+            Customer customer = transaction.getCustomer();
+            BigDecimal balanceChange = calculateBalanceChange(transaction);
+            customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().subtract(balanceChange));
+            customerRepository.save(customer);
+        }
 
+        transactionRepository.delete(transaction);
+    }
+
+    private BigDecimal calculateBalanceChange(Transaction transaction) {
+        BigDecimal balanceChange = BigDecimal.ZERO;
+        for (TransactionItem item : transaction.getItems()) {
+            if (item.getType() == ItemType.SATIS) {
+                balanceChange = balanceChange.add(item.getTotalPrice());
+            } else if (item.getType() == ItemType.IADE) {
+                balanceChange = balanceChange.subtract(item.getTotalPrice());
+            }
+        }
+        for (TransactionPayment payment : transaction.getPayments()) {
+            balanceChange = balanceChange.subtract(payment.getAmount());
+        }
+        return balanceChange;
+    }
+
+    public TransactionResponse getTransactionById(Long transactionId) {
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
+        return transactionMapper.toTransactionResponse(transaction);
+    }
+
+    @Transactional
+    public TransactionResponse updateTransactionItemPrice(Long transactionId, Long itemId, TransactionItemPriceUpdateRequest request) {
+        TransactionItem item = transactionItemRepository.findById(itemId)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction item not found with id: " + itemId));
+        if (!item.getTransaction().getId().equals(transactionId)) {
+            throw new IllegalStateException("Item with id " + itemId + " does not belong to transaction with id " + transactionId);
+        }
+        // Sadece onaylanmış işlemlerde bakiye düzeltmesi yap
+        if (item.getTransaction().getStatus() == TransactionStatus.APPROVED) {
+            BigDecimal oldItemBalanceChange = (item.getType() == ItemType.SATIS) ? item.getTotalPrice() : item.getTotalPrice().negate();
+            item.setUnitPrice(request.getNewUnitPrice());
+            item.setTotalPrice(request.getNewUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
+            BigDecimal newItemBalanceChange = (item.getType() == ItemType.SATIS) ? item.getTotalPrice() : item.getTotalPrice().negate();
+            BigDecimal correction = newItemBalanceChange.subtract(oldItemBalanceChange);
+            Customer customer = item.getTransaction().getCustomer();
+            customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().add(correction));
+            customerRepository.save(customer);
+        } else {
+            // Onay bekleyen işlemde sadece fiyatı güncelle, bakiye etkilenmez
+            item.setUnitPrice(request.getNewUnitPrice());
+            item.setTotalPrice(request.getNewUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
+        }
+        transactionItemRepository.save(item);
+        Transaction updatedTransaction = transactionRepository.findByIdWithDetails(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found after update with id: " + transactionId));
+        return transactionMapper.toTransactionResponse(updatedTransaction);
+    }
+
+    @Transactional
+    public TransactionResponse updateTransaction(Long transactionId, TransactionUpdateRequest request) {
+        Transaction transaction = transactionRepository.findByIdWithDetails(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
+        Customer customer = transaction.getCustomer();
+
+        // Sadece onaylanmışsa eski etkiyi geri al
+        if (transaction.getStatus() == TransactionStatus.APPROVED) {
+            BigDecimal oldBalanceChange = calculateBalanceChange(transaction);
+            customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().subtract(oldBalanceChange));
+        }
+
+        transaction.setNotes(request.getNotes());
+        transaction.getItems().clear();
+        transaction.getPayments().clear();
+
+        if (request.getItems() != null) {
+            request.getItems().forEach(itemRequest -> {
+                Product product = productRepository.findById(itemRequest.getProductId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + itemRequest.getProductId()));
+                TransactionItem newItem = new TransactionItem();
+                newItem.setProduct(product);
+                newItem.setQuantity(itemRequest.getQuantity());
+                newItem.setType(itemRequest.getType());
+                newItem.setUnitPrice(itemRequest.getUnitPrice());
+                newItem.setTotalPrice(itemRequest.getUnitPrice().multiply(BigDecimal.valueOf(itemRequest.getQuantity())));
+                newItem.setTransaction(transaction);
+                transaction.getItems().add(newItem);
+            });
+        }
+        if (request.getPayments() != null) {
+            request.getPayments().forEach(paymentRequest -> {
+                TransactionPayment newPayment = new TransactionPayment();
+                newPayment.setAmount(paymentRequest.getAmount());
+                newPayment.setType(paymentRequest.getType());
+                newPayment.setTransaction(transaction);
+                transaction.getPayments().add(newPayment);
+            });
+        }
+
+        // Sadece onaylanmışsa yeni etkiyi ekle
+        if (transaction.getStatus() == TransactionStatus.APPROVED) {
+            BigDecimal newBalanceChange = calculateBalanceChange(transaction);
+            customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().add(newBalanceChange));
+            customerRepository.save(customer);
+        }
+
+        Transaction updatedTransaction = transactionRepository.save(transaction);
+        return transactionMapper.toTransactionResponse(updatedTransaction);
+    }
+
+    @Transactional(readOnly = true)
+    public List<TransactionResponse> searchTransactions(LocalDate startDate, LocalDate endDate, Long customerId, Long routeId) {
+        Specification<Transaction> spec = Specification.where(null);
+        if (startDate != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.greaterThanOrEqualTo(root.get("transactionDate"), startDate.atStartOfDay()));
+        }
+        if (endDate != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.lessThanOrEqualTo(root.get("transactionDate"), endDate.atTime(23, 59, 59)));
+        }
+        if (customerId != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.equal(root.get("customer").get("id"), customerId));
+        }
+        if (routeId != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.equal(root.get("route").get("id"), routeId));
+        }
+        List<Transaction> transactions = transactionRepository.findAll(spec);
+        return transactions.stream()
+                .map(transactionMapper::toTransactionResponse)
+                .collect(Collectors.toList());
+    }
 }

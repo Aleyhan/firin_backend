@@ -7,7 +7,8 @@ import lombok.Data;
 
     private String description;
 
-    // PLAKA ALANI (opsiyonel)
     private String plaka;
 
+    // YENİ ALAN
+    private Long driverId;
 }

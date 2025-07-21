@@ -17,13 +17,18 @@ public class RouteAssignment {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "route_id")
-    @ToString.Exclude // YENİ ANOTASYON
-    @EqualsAndHashCode.Exclude // YENİ ANOTASYON
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Route route;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id")
-    @ToString.Exclude // YENİ ANOTASYON
-    @EqualsAndHashCode.Exclude // YENİ ANOTASYON
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Customer customer;
+
+    // YENİ ALAN: Teslimat sırası
+    @Column(name = "delivery_order")
+    private Integer deliveryOrder;
+    // YENİ ALAN SONU
 }

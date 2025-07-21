@@ -9,14 +9,14 @@ import org.mapstruct.MappingTarget;
 
 @Mapper(componentModel = "spring")
 public interface RouteMapper {
-    @Mapping(source = "plaka", target = "plaka")
+    @Mapping(target = "driver", ignore = true) // Serviste set edilecek
     Route toRoute(RouteCreateRequest request);
+
+    @Mapping(source = "driver.id", target = "driverId")
+    @Mapping(source = "driver.name", target = "driverName")
     RouteResponse toRouteResponse(Route route);
 
-    // YENİ METOT: Var olan bir rotayı DTO'dan gelen verilerle günceller.
-    // Rota kodunun güncellenmesini engellemek için ignore = true ekliyoruz.
     @Mapping(target = "routeCode", ignore = true)
+    @Mapping(target = "driver", ignore = true) // Serviste set edilecek
     void updateRouteFromDto(RouteUpdateRequest dto, @MappingTarget Route route);
-
-
 }

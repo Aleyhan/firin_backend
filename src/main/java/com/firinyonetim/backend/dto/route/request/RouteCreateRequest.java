@@ -8,14 +8,13 @@ import lombok.Data;
     @Size(min = 4, max = 4, message = "Rota kodu tam olarak 4 haneli olmalıdır.")
     private String routeCode;
 
-
     @NotBlank
     private String name;
 
     private String description;
 
-    // PLAKA ALANI (opsiyonel)
     private String plaka;
 
-
+    // YENİ ALAN
+    private Long driverId;
 }

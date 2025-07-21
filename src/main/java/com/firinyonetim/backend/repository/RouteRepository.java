@@ -12,12 +12,11 @@ public interface RouteRepository extends JpaRepository<Route, Long> {
 
     List<Route> findByIsActiveTrue();
 
-    // YENİ METOT: Hem aktif olanları hem de belirli bir ID'ye sahip olanı getirir (güncelleme senaryoları için).
-    // Bu, pasif bir rotayı düzenlemek istediğimizde onu bulabilmemizi sağlar.
     @Query("SELECT r FROM Route r WHERE r.isActive = true OR r.id = :id")
     List<Route> findAllActiveOrById(Long id);
 
     boolean existsByRouteCode(String routeCode);
 
-
+    // YENİ METOT: Belirli bir şoföre atanmış aktif rotaları bulur
+    List<Route> findByDriverIdAndIsActiveTrue(Long driverId);
 }

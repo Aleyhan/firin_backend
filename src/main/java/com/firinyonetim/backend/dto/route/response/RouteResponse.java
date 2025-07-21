@@ -2,16 +2,16 @@ package com.firinyonetim.backend.dto.route.response;
 import lombok.Data;
 @Data public class RouteResponse {
     private Long id;
-    private String routeCode; // YENİ ALAN
+    private String routeCode;
 
     private String name;
     private String description;
 
-    // YENİ ALAN
     private boolean isActive;
 
-    // PLAKA ALANI (opsiyonel)
     private String plaka;
 
-
+    // YENİ ALANLAR
+    private Long driverId;
+    private String driverName;
 }

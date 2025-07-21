@@ -9,11 +9,13 @@ import org.mapstruct.Mapping;
 public interface TransactionMapper {
 
     @Mapping(source = "customer.id", target = "customerId")
-    @Mapping(source = "customer.customerCode", target = "customerCode") // YENİ MAPPING
+    @Mapping(source = "customer.customerCode", target = "customerCode")
     @Mapping(source = "customer.name", target = "customerName")
     @Mapping(source = "createdBy.id", target = "createdByUserId")
     @Mapping(source = "createdBy.username", target = "createdByUsername")
     @Mapping(source = "route.id", target = "routeId")
     @Mapping(source = "route.name", target = "routeName")
+    @Mapping(source = "status", target = "status") // YENİ MAPPING
+    @Mapping(source = "rejectionReason", target = "rejectionReason") // YENİ MAPPING
     TransactionResponse toTransactionResponse(Transaction transaction);
 }

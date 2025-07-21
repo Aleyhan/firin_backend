@@ -3,29 +3,20 @@ package com.firinyonetim.backend.service;
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
 import com.firinyonetim.backend.dto.route.request.RouteCreateRequest;
 import com.firinyonetim.backend.dto.route.response.RouteResponse;
-import com.firinyonetim.backend.entity.Customer;
-import com.firinyonetim.backend.entity.Route;
-import com.firinyonetim.backend.entity.RouteAssignment;
-import com.firinyonetim.backend.entity.Transaction;
+import com.firinyonetim.backend.entity.*;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.mapper.CustomerMapper;
 import com.firinyonetim.backend.mapper.RouteMapper;
-import com.firinyonetim.backend.repository.CustomerRepository;
-import com.firinyonetim.backend.repository.RouteAssignmentRepository;
-import com.firinyonetim.backend.repository.RouteRepository;
-import com.firinyonetim.backend.repository.TransactionRepository;
+import com.firinyonetim.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.firinyonetim.backend.dto.route.request.RouteUpdateRequest; // YENİ IMPORT
-import com.firinyonetim.backend.exception.ResourceNotFoundException; // YENİ IMPORT
+import com.firinyonetim.backend.dto.route.request.RouteUpdateRequest;
 import com.firinyonetim.backend.dto.route.RouteDailySummaryDto;
-// ... mevcut importlar ...
 import com.firinyonetim.backend.entity.ItemType;
 import com.firinyonetim.backend.entity.PaymentType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-// ... importlar ...
 import com.firinyonetim.backend.dto.route.RouteProductSummaryDto;
 import com.firinyonetim.backend.entity.TransactionItem;
 
@@ -50,24 +41,30 @@ public class RouteService {
     private final RouteRepository routeRepository;
     private final RouteAssignmentRepository routeAssignmentRepository;
     private final CustomerRepository customerRepository;
-    private final RouteMapper routeMapper;
+    private final UserRepository userRepository; // YENİ
+    public final RouteMapper routeMapper;
     private final CustomerMapper customerMapper;
-    private final TransactionRepository transactionRepository; // YENİ: TransactionRepository'i inject et
+    private final TransactionRepository transactionRepository;
     private static final Logger logger = LoggerFactory.getLogger(RouteService.class);
 
-
-
-    @Transactional // createRoute metodunun @Transactional olduğundan emin olun
+    @Transactional
     public RouteResponse createRoute(RouteCreateRequest request) {
-        // 1. Benzersizlik kontrolü
         if (routeRepository.existsByRouteCode(request.getRouteCode())) {
             throw new IllegalStateException("Rota kodu '" + request.getRouteCode() + "' zaten kullanılıyor.");
         }
 
-        // 2. Mapper ile entity'e çevir
         Route route = routeMapper.toRoute(request);
 
-        // 3. Kaydet ve response'a çevirip döndür
+        // YENİ: Şoför atama mantığı
+        if (request.getDriverId() != null) {
+            User driver = userRepository.findById(request.getDriverId())
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + request.getDriverId()));
+            if (driver.getRole() != Role.SOFOR) {
+                throw new IllegalArgumentException("Bu kullanıcı bir şoför değil.");
+            }
+            route.setDriver(driver);
+        }
+
         return routeMapper.toRouteResponse(routeRepository.save(route));
     }
 
@@ -77,18 +74,14 @@ public class RouteService {
                 .collect(Collectors.toList());
     }
 
-    // 2. Rota silme metodunu GÜNCELLE (Artık pasif hale getirecek)
     @Transactional
     public void deleteRouteByStatus(Long routeId) {
         Route route = routeRepository.findById(routeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
-
-        // Gerçek silme yerine, rotayı pasif hale getiriyoruz.
         route.setActive(false);
         routeRepository.save(route);
     }
 
-    // --- Atama İşlemleri ---
     @Transactional
     public void assignCustomerToRoute(Long routeId, Long customerId) {
         Route route = routeRepository.findById(routeId)
@@ -107,15 +100,13 @@ public class RouteService {
         Route route = routeRepository.findById(routeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
 
-        // Get all current assignments for the route
-        List<RouteAssignment> existingAssignments = routeAssignmentRepository.findByRouteId(routeId);
+        List<RouteAssignment> existingAssignments = routeAssignmentRepository.findByRouteIdOrderByDeliveryOrderAsc(routeId);
         Set<Long> existingCustomerIds = existingAssignments.stream()
                 .map(assignment -> assignment.getCustomer().getId())
                 .collect(Collectors.toSet());
 
         Set<Long> desiredCustomerIds = new java.util.HashSet<>(customerIds);
 
-        // --- Step 1: Identify and remove customers no longer on the route ---
         List<RouteAssignment> assignmentsToRemove = existingAssignments.stream()
                 .filter(assignment -> !desiredCustomerIds.contains(assignment.getCustomer().getId()))
                 .collect(Collectors.toList());
@@ -124,7 +115,6 @@ public class RouteService {
             routeAssignmentRepository.deleteAll(assignmentsToRemove);
         }
 
-        // --- Step 2: Identify and add new customers ---
         List<Long> newCustomerIds = desiredCustomerIds.stream()
                 .filter(id -> !existingCustomerIds.contains(id))
                 .collect(Collectors.toList());
@@ -144,15 +134,14 @@ public class RouteService {
 
     @Transactional
     public void removeCustomerFromRoute(Long routeId, Long customerId) {
-        // Bu metot daha verimli hale getirilebilir, şimdilik basit tutuyoruz.
-        routeAssignmentRepository.findByRouteId(routeId).stream()
+        routeAssignmentRepository.findByRouteIdOrderByDeliveryOrderAsc(routeId).stream()
                 .filter(assignment -> assignment.getCustomer().getId().equals(customerId))
                 .findFirst()
                 .ifPresent(routeAssignmentRepository::delete);
     }
 
     public List<CustomerResponse> getCustomersByRoute(Long routeId) {
-        return routeAssignmentRepository.findByRouteId(routeId).stream()
+        return routeAssignmentRepository.findByRouteIdOrderByDeliveryOrderAsc(routeId).stream()
                 .map(RouteAssignment::getCustomer)
                 .map(customerMapper::toCustomerResponse)
                 .collect(Collectors.toList());
@@ -166,12 +155,23 @@ public class RouteService {
     }
 
     @Transactional
-    public RouteResponse updateRoute(Long routeId, RouteUpdateRequest request) { // <<< DÜZELTİLDİ
+    public RouteResponse updateRoute(Long routeId, RouteUpdateRequest request) {
         Route route = routeRepository.findById(routeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
 
-        // 'request' artık doğru tipte (RouteUpdateRequest) olduğu için mapper sorunsuz çalışacak.
         routeMapper.updateRouteFromDto(request, route);
+
+        // YENİ: Şoför atama mantığı
+        if (request.getDriverId() != null) {
+            User driver = userRepository.findById(request.getDriverId())
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + request.getDriverId()));
+            if (driver.getRole() != Role.SOFOR) {
+                throw new IllegalArgumentException("Bu kullanıcı bir şoför değil.");
+            }
+            route.setDriver(driver);
+        } else {
+            route.setDriver(null); // Şoförü rotadan kaldırma
+        }
 
         Route savedRoute = routeRepository.save(route);
         return routeMapper.toRouteResponse(savedRoute);
@@ -185,26 +185,21 @@ public class RouteService {
 
     @Transactional
     public void updateRouteCustomers(Long routeId, List<Long> customerIds) {
-        // 1. Rotanın var olup olmadığını kontrol et
         Route route = routeRepository.findById(routeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
 
-        // 2. Bu rotaya zaten atanmış olan müşteri ID'lerinin bir set'ini oluştur.
-        // Bu, veritabanına tekrar tekrar "bu atama var mı?" diye sormamızı engeller.
-        List<Long> existingCustomerIds = routeAssignmentRepository.findByRouteId(routeId).stream()
+        List<Long> existingCustomerIds = routeAssignmentRepository.findByRouteIdOrderByDeliveryOrderAsc(routeId).stream()
                 .map(assignment -> assignment.getCustomer().getId())
                 .collect(Collectors.toList());
 
-        // 3. Gelen listeden sadece yeni (henüz atanmamış) müşteri ID'lerini filtrele.
         List<Long> newCustomerIds = customerIds.stream()
                 .filter(id -> !existingCustomerIds.contains(id))
                 .collect(Collectors.toList());
 
         List<Long> mergedCustomerIds = Stream.concat(existingCustomerIds.stream(), newCustomerIds.stream())
-                .distinct() // Remove duplicates if any
+                .distinct()
                 .collect(Collectors.toList());
 
-        // 4. Yeni müşteriler varsa, onları bul ve rotaya ata.
         if (!mergedCustomerIds.isEmpty()) {
             List<Customer> customersToAdd = customerRepository.findAllById(mergedCustomerIds);
 
@@ -215,7 +210,6 @@ public class RouteService {
                 return assignment;
             }).collect(Collectors.toList());
 
-            // Performans için toplu kaydetme
             routeAssignmentRepository.saveAll(newAssignments);
         }
     }
@@ -225,10 +219,8 @@ public class RouteService {
         Customer customer = customerRepository.findById(customerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
 
-        // Müşterinin mevcut tüm atamalarını sil
         routeAssignmentRepository.deleteByCustomerId(customerId);
 
-        // Yeni atamaları ekle
         if (routeIds != null && !routeIds.isEmpty()) {
             List<Route> routes = routeRepository.findAllById(routeIds);
             routes.forEach(route -> {
@@ -240,58 +232,46 @@ public class RouteService {
         }
     }
 
-    // YENİ METOT
     @Transactional
     public void addCustomersToRoute(Long routeId, List<Long> customerIds) {
-        // 1. Rotayı ve ilişkili atamalarını getir.
-        // findById kullanmak burada daha verimli olabilir, çünkü tüm müşteri nesnelerine ihtiyacımız yok.
         Route route = routeRepository.findById(routeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
 
-        // 2. Bu rotaya zaten atanmış olan müşteri ID'lerinin bir set'ini oluştur.
-        // Bu, veritabanına tekrar tekrar "bu atama var mı?" diye sormamızı engeller.
         Set<Long> existingCustomerIds = route.getAssignments().stream()
                 .map(assignment -> assignment.getCustomer().getId())
                 .collect(Collectors.toSet());
 
-        // 3. Gelen listedeki müşterileri bul.
         List<Customer> customersToAdd = customerRepository.findAllById(customerIds);
         if (customersToAdd.size() != customerIds.size()) {
-            // Bu, gelen ID'lerden bazılarının geçersiz olduğunu gösterir.
-            // Hata fırlatabilir veya görmezden gelebiliriz. Şimdilik devam edelim.
             System.out.println("Warning: Some customer IDs were not found and will be ignored.");
         }
 
-        // 4. Her bir müşteri için, eğer zaten atanmamışsa, yeni bir atama oluştur.
         for (Customer customer : customersToAdd) {
             if (!existingCustomerIds.contains(customer.getId())) {
                 RouteAssignment newAssignment = new RouteAssignment();
                 newAssignment.setRoute(route);
                 newAssignment.setCustomer(customer);
                 routeAssignmentRepository.save(newAssignment);
-                // Performans için saveAll da kullanılabilir, ancak bu daha net.
             }
         }
     }
 
-    public Map<Long, Long> getCustomerCountsPerRoute() { // <<< İMZA DEĞİŞTİ
+    public Map<Long, Long> getCustomerCountsPerRoute() {
         List<Route> routes = routeRepository.findAllWithCustomers();
         return routes.stream()
                 .collect(Collectors.toMap(
-                        Route::getId, // <<< DEĞİŞİKLİK BURADA: Rota ID'sini anahtar yapıyor
+                        Route::getId,
                         route -> (long) route.getAssignments().size()
                 ));
     }
-
-    // ... diğer metotlar
 
     @Transactional
     public RouteResponse toggleRouteStatus(Long routeId) {
         Route route = routeRepository.findById(routeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
-        route.setActive(!route.isActive()); // Mevcut durumu tersine çevir
+        route.setActive(!route.isActive());
         Route updatedRoute = routeRepository.save(route);
-        return routeMapper.toRouteResponse(updatedRoute); // Mevcut mapper'ı kullanarak dönüşüm yap
+        return routeMapper.toRouteResponse(updatedRoute);
     }
 
     @Transactional(readOnly = true)
@@ -314,8 +294,6 @@ public class RouteService {
         List<Transaction> transactions = transactionRepository.findTransactionsBetween(startOfDay, startOfNextDay);
 
         Map<Long, RouteDailySummaryDto> summaryMap = new HashMap<>();
-        // YENİ: Rota ve Ürün bazında adetleri tutacak iç içe geçmiş bir harita
-        // Map<RotaID, Map<UrunID, RouteProductSummaryDto>>
         Map<Long, Map<Long, RouteProductSummaryDto>> productSummaryMap = new HashMap<>();
 
         for (Transaction transaction : transactions) {
@@ -332,7 +310,6 @@ public class RouteService {
                 return newSummary;
             });
 
-            // Rota için ürün haritasını al veya oluştur
             productSummaryMap.computeIfAbsent(routeId, k -> new HashMap<>());
 
             for (TransactionItem item : transaction.getItems()) {
@@ -342,7 +319,6 @@ public class RouteService {
                     summary.setTotalReturns(summary.getTotalReturns().add(item.getTotalPrice()));
                 }
 
-                // Ürün bazlı adetleri güncelle
                 Long productId = item.getProduct().getId();
                 RouteProductSummaryDto productSummary = productSummaryMap.get(routeId)
                         .computeIfAbsent(productId, id -> new RouteProductSummaryDto(id, item.getProduct().getName(), 0, 0));
@@ -371,7 +347,6 @@ public class RouteService {
             summary.setNetRevenue(netRevenue);
             summary.setBalanceChange(balanceChange);
 
-            // Hesaplanan ürün özetlerini ana DTO'ya ekle
             Map<Long, RouteProductSummaryDto> productsForRoute = productSummaryMap.get(summary.getRouteId());
             if (productsForRoute != null) {
                 summary.setProductSummaries(new ArrayList<>(productsForRoute.values()));
@@ -381,4 +356,20 @@ public class RouteService {
         return new ArrayList<>(summaryMap.values());
     }
 
+    // YENİ METOT: Teslimat sırasını güncellemek için
+    @Transactional
+    public void updateDeliveryOrder(Long routeId, List<Long> orderedCustomerIds) {
+        List<RouteAssignment> assignments = routeAssignmentRepository.findByRouteIdOrderByDeliveryOrderAsc(routeId);
+        Map<Long, RouteAssignment> assignmentMap = assignments.stream()
+                .collect(Collectors.toMap(ra -> ra.getCustomer().getId(), ra -> ra));
+
+        for (int i = 0; i < orderedCustomerIds.size(); i++) {
+            Long customerId = orderedCustomerIds.get(i);
+            RouteAssignment assignment = assignmentMap.get(customerId);
+            if (assignment != null) {
+                assignment.setDeliveryOrder(i + 1); // Sıra 1'den başlar
+            }
+        }
+        routeAssignmentRepository.saveAll(assignments);
+    }
 }
