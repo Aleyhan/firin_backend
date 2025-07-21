@@ -1,17 +1,20 @@
 package com.firinyonetim.backend.controller;
 
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
+import com.firinyonetim.backend.dto.route.RouteDailySummaryDto;
 import com.firinyonetim.backend.dto.route.request.RouteCreateRequest;
 import com.firinyonetim.backend.dto.route.request.RouteUpdateRequest;
 import com.firinyonetim.backend.dto.route.response.RouteResponse;
 import com.firinyonetim.backend.service.RouteService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -103,6 +106,14 @@ public class RouteController {
     public ResponseEntity<Double> getTotalDebtForRoute(@PathVariable Long routeId) {
         double totalDebt = routeService.getTotalDebtForRoute(routeId);
         return ResponseEntity.ok(totalDebt);
+    }
+
+    // YENİ ENDPOINT
+    @GetMapping("/daily-summary")
+    @PreAuthorize("hasRole('YONETICI')")
+    public ResponseEntity<List<RouteDailySummaryDto>> getDailySummaries(
+            @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return ResponseEntity.ok(routeService.getDailySummaries(date));
     }
 
 }

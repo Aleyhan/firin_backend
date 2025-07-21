@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -48,6 +49,22 @@ public class TransactionService {
         transaction.setCustomer(customer);
         transaction.setCreatedBy(currentUser);
         transaction.setNotes(request.getNotes());
+
+
+        // DEĞİŞİKLİK: Tarihi request'ten alıyoruz.
+        // Eğer tarih gelmezse, güvenlik önlemi olarak bugünün tarihini kullan.
+        // Günün başlangıcı olarak (00:00) kaydediyoruz.
+        if (request.getTransactionDate() != null) {
+            transaction.setTransactionDate(request.getTransactionDate().atStartOfDay());
+        } else {
+            transaction.setTransactionDate(LocalDateTime.now());
+        }
+
+        if (request.getRouteId() != null) {
+            Route route = routeRepository.findById(request.getRouteId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + request.getRouteId()));
+            transaction.setRoute(route);
+        }
 
         if (request.getRouteId() != null) {
             Route route = routeRepository.findById(request.getRouteId())

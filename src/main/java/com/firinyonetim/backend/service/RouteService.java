@@ -6,22 +6,40 @@ import com.firinyonetim.backend.dto.route.response.RouteResponse;
 import com.firinyonetim.backend.entity.Customer;
 import com.firinyonetim.backend.entity.Route;
 import com.firinyonetim.backend.entity.RouteAssignment;
+import com.firinyonetim.backend.entity.Transaction;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.mapper.CustomerMapper;
 import com.firinyonetim.backend.mapper.RouteMapper;
 import com.firinyonetim.backend.repository.CustomerRepository;
 import com.firinyonetim.backend.repository.RouteAssignmentRepository;
 import com.firinyonetim.backend.repository.RouteRepository;
+import com.firinyonetim.backend.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.firinyonetim.backend.dto.route.request.RouteUpdateRequest; // YENİ IMPORT
 import com.firinyonetim.backend.exception.ResourceNotFoundException; // YENİ IMPORT
+import com.firinyonetim.backend.dto.route.RouteDailySummaryDto;
+// ... mevcut importlar ...
+import com.firinyonetim.backend.entity.ItemType;
+import com.firinyonetim.backend.entity.PaymentType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+// ... importlar ...
+import com.firinyonetim.backend.dto.route.RouteProductSummaryDto;
+import com.firinyonetim.backend.entity.TransactionItem;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 
 
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -34,6 +52,9 @@ public class RouteService {
     private final CustomerRepository customerRepository;
     private final RouteMapper routeMapper;
     private final CustomerMapper customerMapper;
+    private final TransactionRepository transactionRepository; // YENİ: TransactionRepository'i inject et
+    private static final Logger logger = LoggerFactory.getLogger(RouteService.class);
+
 
 
     @Transactional // createRoute metodunun @Transactional olduğundan emin olun
@@ -285,5 +306,79 @@ public class RouteService {
                 .sum();
     }
 
+
+    @Transactional(readOnly = true)
+    public List<RouteDailySummaryDto> getDailySummaries(LocalDate date) {
+        LocalDateTime startOfDay = date.atStartOfDay();
+        LocalDateTime startOfNextDay = date.plusDays(1).atStartOfDay();
+        List<Transaction> transactions = transactionRepository.findTransactionsBetween(startOfDay, startOfNextDay);
+
+        Map<Long, RouteDailySummaryDto> summaryMap = new HashMap<>();
+        // YENİ: Rota ve Ürün bazında adetleri tutacak iç içe geçmiş bir harita
+        // Map<RotaID, Map<UrunID, RouteProductSummaryDto>>
+        Map<Long, Map<Long, RouteProductSummaryDto>> productSummaryMap = new HashMap<>();
+
+        for (Transaction transaction : transactions) {
+            if (transaction.getRoute() == null) {
+                continue;
+            }
+
+            Long routeId = transaction.getRoute().getId();
+            RouteDailySummaryDto summary = summaryMap.computeIfAbsent(routeId, id -> {
+                RouteDailySummaryDto newSummary = new RouteDailySummaryDto();
+                newSummary.setRouteId(id);
+                newSummary.setRouteCode(transaction.getRoute().getRouteCode());
+                newSummary.setRouteName(transaction.getRoute().getName());
+                return newSummary;
+            });
+
+            // Rota için ürün haritasını al veya oluştur
+            productSummaryMap.computeIfAbsent(routeId, k -> new HashMap<>());
+
+            for (TransactionItem item : transaction.getItems()) {
+                if (item.getType() == ItemType.SATIS) {
+                    summary.setTotalSales(summary.getTotalSales().add(item.getTotalPrice()));
+                } else if (item.getType() == ItemType.IADE) {
+                    summary.setTotalReturns(summary.getTotalReturns().add(item.getTotalPrice()));
+                }
+
+                // Ürün bazlı adetleri güncelle
+                Long productId = item.getProduct().getId();
+                RouteProductSummaryDto productSummary = productSummaryMap.get(routeId)
+                        .computeIfAbsent(productId, id -> new RouteProductSummaryDto(id, item.getProduct().getName(), 0, 0));
+
+                if (item.getType() == ItemType.SATIS) {
+                    productSummary.setTotalSold(productSummary.getTotalSold() + item.getQuantity());
+                } else {
+                    productSummary.setTotalReturned(productSummary.getTotalReturned() + item.getQuantity());
+                }
+            }
+
+            transaction.getPayments().forEach(payment -> {
+                if (payment.getType() == PaymentType.NAKIT) {
+                    summary.setTotalCashPayment(summary.getTotalCashPayment().add(payment.getAmount()));
+                } else if (payment.getType() == PaymentType.KART) {
+                    summary.setTotalCardPayment(summary.getTotalCardPayment().add(payment.getAmount()));
+                }
+            });
+        }
+
+        summaryMap.values().forEach(summary -> {
+            BigDecimal netRevenue = summary.getTotalSales().subtract(summary.getTotalReturns());
+            BigDecimal totalPayments = summary.getTotalCashPayment().add(summary.getTotalCardPayment());
+            BigDecimal balanceChange = netRevenue.subtract(totalPayments);
+
+            summary.setNetRevenue(netRevenue);
+            summary.setBalanceChange(balanceChange);
+
+            // Hesaplanan ürün özetlerini ana DTO'ya ekle
+            Map<Long, RouteProductSummaryDto> productsForRoute = productSummaryMap.get(summary.getRouteId());
+            if (productsForRoute != null) {
+                summary.setProductSummaries(new ArrayList<>(productsForRoute.values()));
+            }
+        });
+
+        return new ArrayList<>(summaryMap.values());
+    }
 
 }
