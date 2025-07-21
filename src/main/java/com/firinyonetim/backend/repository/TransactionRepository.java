@@ -28,12 +28,25 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
 
     // DEĞİŞİKLİK: Sorgu güncellendi.
     @Query("SELECT t FROM Transaction t " +
+            "JOIN FETCH t.customer " +
+            "JOIN FETCH t.createdBy " +
             "LEFT JOIN FETCH t.route " +
-            "LEFT JOIN FETCH t.items " +
+            "LEFT JOIN FETCH t.items ti " +
+            "LEFT JOIN FETCH ti.product " +
             "LEFT JOIN FETCH t.payments " +
             "WHERE t.transactionDate >= :startOfDay AND t.transactionDate < :startOfNextDay")
     List<Transaction> findTransactionsBetween(@Param("startOfDay") LocalDateTime startOfDay, @Param("startOfNextDay") LocalDateTime startOfNextDay);
 
     @Query(value = "SELECT * FROM transactions t WHERE CAST(t.transaction_date AS date) = :date", nativeQuery = true)
     List<Transaction> findTransactionsByDate(@Param("date") LocalDate date);
+
+    @Query("SELECT t FROM Transaction t " +
+            "JOIN FETCH t.customer " +
+            "JOIN FETCH t.createdBy " +
+            "LEFT JOIN FETCH t.route " +
+            "LEFT JOIN FETCH t.items ti " +
+            "LEFT JOIN FETCH ti.product " +
+            "LEFT JOIN FETCH t.payments " +
+            "ORDER BY t.transactionDate DESC LIMIT 10")
+    List<Transaction> findTop10ByOrderByTransactionDateDesc();
 }

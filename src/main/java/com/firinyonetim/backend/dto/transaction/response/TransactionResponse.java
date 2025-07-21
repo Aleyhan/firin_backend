@@ -8,9 +8,10 @@ import java.util.List;
 public class TransactionResponse {
     private Long id;
     private Long customerId;
+    private String customerCode; // YENİ ALAN
     private String customerName;
-    private Long routeId; // YENİ EKLENDİ
-    private String routeName; // YENİ EKLENDİ
+    private Long routeId;
+    private String routeName;
     private LocalDateTime transactionDate;
     private String notes;
     private Long createdByUserId;
