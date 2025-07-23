@@ -1,3 +1,4 @@
+// src/main/java/com/firinyonetim/backend/mapper/TransactionMapper.java
 package com.firinyonetim.backend.mapper;
 
 import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
@@ -15,7 +16,8 @@ public interface TransactionMapper {
     @Mapping(source = "createdBy.username", target = "createdByUsername")
     @Mapping(source = "route.id", target = "routeId")
     @Mapping(source = "route.name", target = "routeName")
-    @Mapping(source = "status", target = "status") // YENİ MAPPING
-    @Mapping(source = "rejectionReason", target = "rejectionReason") // YENİ MAPPING
+    @Mapping(source = "status", target = "status")
+    @Mapping(source = "rejectionReason", target = "rejectionReason")
+    @Mapping(target = "dailySequenceNumber", ignore = true) // YENİ MAPPING
     TransactionResponse toTransactionResponse(Transaction transaction);
 }

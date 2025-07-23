@@ -1,6 +1,8 @@
+// src/main/java/com/firinyonetim/backend/controller/DriverController.java
 package com.firinyonetim.backend.controller;
 
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
+import com.firinyonetim.backend.dto.driver.response.DriverDailyCustomerSummaryDto;
 import com.firinyonetim.backend.dto.route.response.RouteResponse;
 import com.firinyonetim.backend.dto.transaction.request.TransactionCreateRequest;
 import com.firinyonetim.backend.dto.transaction.request.TransactionUpdateRequest;
@@ -26,7 +28,6 @@ public class DriverController {
     private final RouteService routeService;
     private final TransactionService transactionService;
 
-    // DEĞİŞİKLİK: Artık repository yerine RouteService'i çağırıyor.
     @GetMapping("/my-routes")
     public ResponseEntity<List<RouteResponse>> getMyRoutes(@AuthenticationPrincipal User driver) {
         return ResponseEntity.ok(routeService.getDriverRoutes(driver.getId()));
@@ -54,5 +55,13 @@ public class DriverController {
     public ResponseEntity<Void> deleteTransaction(@PathVariable Long transactionId, @AuthenticationPrincipal User driver) {
         transactionService.deletePendingTransaction(transactionId, driver.getId());
         return ResponseEntity.noContent().build();
+    }
+
+    // YENİ ENDPOINT
+    @GetMapping("/customers/{customerId}/todays-summary")
+    public ResponseEntity<DriverDailyCustomerSummaryDto> getTodaysSummaryForCustomer(
+            @PathVariable Long customerId,
+            @AuthenticationPrincipal User driver) {
+        return ResponseEntity.ok(transactionService.getDriverDailySummaryForCustomer(customerId, driver.getId()));
     }
 }

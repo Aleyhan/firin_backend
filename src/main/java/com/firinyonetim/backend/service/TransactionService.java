@@ -1,5 +1,9 @@
+// src/main/java/com/firinyonetim/backend/service/TransactionService.java
 package com.firinyonetim.backend.service;
 
+import com.firinyonetim.backend.dto.driver.response.DriverDailyCustomerSummaryDto;
+import com.firinyonetim.backend.dto.driver.response.DriverTodaysTransactionDto;
+import com.firinyonetim.backend.dto.driver.response.DriverTodaysTransactionItemDto;
 import com.firinyonetim.backend.dto.transaction.request.TransactionCreateRequest;
 import com.firinyonetim.backend.dto.transaction.request.TransactionItemPriceUpdateRequest;
 import com.firinyonetim.backend.dto.transaction.request.TransactionUpdateRequest;
@@ -18,8 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
+import java.time.LocalTime;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -34,7 +38,7 @@ public class TransactionService {
     private final TransactionItemRepository transactionItemRepository;
     private final CustomerProductAssignmentRepository customerProductAssignmentRepository;
 
-    // YÖNETİCİ İÇİN MEVCUT METOT: Bu metot işlemi oluşturur ve anında ONAYLAR.
+    // ... Diğer metotlar aynı kalacak ...
     @Transactional
     public TransactionResponse createAndApproveTransaction(TransactionCreateRequest request) {
         Transaction transaction = createTransactionInternal(request, true); // Bakiye güncellenecek
@@ -43,7 +47,6 @@ public class TransactionService {
         return transactionMapper.toTransactionResponse(savedTransaction);
     }
 
-    // ŞOFÖR İÇİN YENİ METOT: Bu metot işlemi oluşturur ama ONAY BEKLİYOR olarak bırakır.
     @Transactional
     public TransactionResponse createPendingTransaction(TransactionCreateRequest request) {
         Transaction transaction = createTransactionInternal(request, false); // Bakiye GÜNCELLENMEYECEK
@@ -52,7 +55,6 @@ public class TransactionService {
         return transactionMapper.toTransactionResponse(savedTransaction);
     }
 
-    // ORTAK İŞLEM OLUŞTURMA MANTIĞI
     private Transaction createTransactionInternal(TransactionCreateRequest request, boolean updateBalance) {
         Customer customer = customerRepository.findById(request.getCustomerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + request.getCustomerId()));
@@ -132,7 +134,6 @@ public class TransactionService {
         return transaction;
     }
 
-    // YENİ METOT: İşlemi Onaylama
     @Transactional
     public TransactionResponse approveTransaction(Long transactionId) {
         Transaction transaction = transactionRepository.findById(transactionId)
@@ -144,7 +145,6 @@ public class TransactionService {
 
         transaction.setStatus(TransactionStatus.APPROVED);
 
-        // Bakiye güncellemesini SADECE bu aşamada yap
         BigDecimal balanceChange = calculateBalanceChange(transaction);
         Customer customer = transaction.getCustomer();
         customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().add(balanceChange));
@@ -154,7 +154,6 @@ public class TransactionService {
         return transactionMapper.toTransactionResponse(savedTransaction);
     }
 
-    // YENİ METOT: İşlemi Reddetme
     @Transactional
     public TransactionResponse rejectTransaction(Long transactionId, String reason) {
         Transaction transaction = transactionRepository.findById(transactionId)
@@ -171,7 +170,6 @@ public class TransactionService {
         return transactionMapper.toTransactionResponse(savedTransaction);
     }
 
-    // YENİ METOT: Onay bekleyen işlemleri listeleme
     @Transactional(readOnly = true)
     public List<TransactionResponse> getPendingTransactions() {
         return transactionRepository.findByStatusOrderByTransactionDateAsc(TransactionStatus.PENDING)
@@ -180,7 +178,6 @@ public class TransactionService {
                 .collect(Collectors.toList());
     }
 
-    // YENİ METOT: Şoförün kendi bekleyen işlemini güncellemesi
     @Transactional
     public TransactionResponse updatePendingTransaction(Long transactionId, TransactionUpdateRequest request, Long driverId) {
         Transaction transaction = transactionRepository.findByIdWithDetails(transactionId)
@@ -193,12 +190,10 @@ public class TransactionService {
             throw new AccessDeniedException("Bu işlemi güncelleme yetkiniz yok.");
         }
 
-        // Bu işlem bakiye etkilemediği için, eski etkiyi geri almaya gerek yok.
         transaction.setNotes(request.getNotes());
         transaction.getItems().clear();
         transaction.getPayments().clear();
 
-        // Yeni item ve payment'ları ekle (bakiye güncellemesi olmadan)
         if (request.getItems() != null) {
             request.getItems().forEach(itemRequest -> {
                 Product product = productRepository.findById(itemRequest.getProductId())
@@ -227,7 +222,6 @@ public class TransactionService {
         return transactionMapper.toTransactionResponse(updatedTransaction);
     }
 
-    // YENİ METOT: Şoförün kendi bekleyen işlemini silmesi
     @Transactional
     public void deletePendingTransaction(Long transactionId, Long driverId) {
         Transaction transaction = transactionRepository.findById(transactionId)
@@ -243,15 +237,14 @@ public class TransactionService {
         transactionRepository.delete(transaction);
     }
 
-    // --- MEVCUT METOTLAR (DEĞİŞİKLİK YOK) ---
     public List<TransactionResponse> getTransactionsByCustomerId(Long customerId) {
         if (!customerRepository.existsById(customerId)) {
             throw new ResourceNotFoundException("Customer not found with id: " + customerId);
         }
-        List<Transaction> transactions = transactionRepository.findByCustomerIdOrderByTransactionDateDesc(customerId);
-        return transactions.stream()
-                .map(transactionMapper::toTransactionResponse)
-                .collect(Collectors.toList());
+        List<Transaction> transactions = transactionRepository.findByCustomerIdOrderByTransactionDateAsc(customerId);
+        List<TransactionResponse> responseList = populateDailySequenceNumbers(transactions);
+        Collections.reverse(responseList);
+        return responseList;
     }
 
     @Transactional
@@ -259,7 +252,6 @@ public class TransactionService {
         Transaction transaction = transactionRepository.findById(transactionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
 
-        // Sadece onaylanmış bir işlem siliniyorsa bakiyeyi geri al
         if (transaction.getStatus() == TransactionStatus.APPROVED) {
             Customer customer = transaction.getCustomer();
             BigDecimal balanceChange = calculateBalanceChange(transaction);
@@ -298,7 +290,6 @@ public class TransactionService {
         if (!item.getTransaction().getId().equals(transactionId)) {
             throw new IllegalStateException("Item with id " + itemId + " does not belong to transaction with id " + transactionId);
         }
-        // Sadece onaylanmış işlemlerde bakiye düzeltmesi yap
         if (item.getTransaction().getStatus() == TransactionStatus.APPROVED) {
             BigDecimal oldItemBalanceChange = (item.getType() == ItemType.SATIS) ? item.getTotalPrice() : item.getTotalPrice().negate();
             item.setUnitPrice(request.getNewUnitPrice());
@@ -309,7 +300,6 @@ public class TransactionService {
             customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().add(correction));
             customerRepository.save(customer);
         } else {
-            // Onay bekleyen işlemde sadece fiyatı güncelle, bakiye etkilenmez
             item.setUnitPrice(request.getNewUnitPrice());
             item.setTotalPrice(request.getNewUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
         }
@@ -325,7 +315,6 @@ public class TransactionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
         Customer customer = transaction.getCustomer();
 
-        // Sadece onaylanmışsa eski etkiyi geri al
         if (transaction.getStatus() == TransactionStatus.APPROVED) {
             BigDecimal oldBalanceChange = calculateBalanceChange(transaction);
             customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().subtract(oldBalanceChange));
@@ -359,7 +348,6 @@ public class TransactionService {
             });
         }
 
-        // Sadece onaylanmışsa yeni etkiyi ekle
         if (transaction.getStatus() == TransactionStatus.APPROVED) {
             BigDecimal newBalanceChange = calculateBalanceChange(transaction);
             customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().add(newBalanceChange));
@@ -394,16 +382,70 @@ public class TransactionService {
                     criteriaBuilder.equal(root.get("route").get("id"), routeId));
         }
 
-        // YENİ FİLTRELEME KOŞULU
         if (status != null) {
             spec = spec.and((root, query, criteriaBuilder) ->
                     criteriaBuilder.equal(root.get("status"), status));
         }
 
         List<Transaction> transactions = transactionRepository.findAll(spec);
+        transactions.sort(Comparator.comparing(Transaction::getTransactionDate));
+        return populateDailySequenceNumbers(transactions);
+    }
 
+    private List<TransactionResponse> populateDailySequenceNumbers(List<Transaction> transactions) {
+        Map<LocalDate, Integer> dailyCounters = new HashMap<>();
         return transactions.stream()
-                .map(transactionMapper::toTransactionResponse)
+                .map(transaction -> {
+                    TransactionResponse dto = transactionMapper.toTransactionResponse(transaction);
+                    LocalDate date = transaction.getTransactionDate().toLocalDate();
+                    int sequence = dailyCounters.merge(date, 1, Integer::sum);
+                    dto.setDailySequenceNumber(sequence);
+                    return dto;
+                })
                 .collect(Collectors.toList());
+    }
+
+    // METOT GÜNCELLENDİ
+    @Transactional(readOnly = true)
+    public DriverDailyCustomerSummaryDto getDriverDailySummaryForCustomer(Long customerId, Long driverId) {
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        LocalDateTime endOfDay = LocalDate.now().atTime(LocalTime.MAX);
+
+        List<Transaction> todaysTransactions = transactionRepository.findTodaysTransactionsByCustomerAndDriver(customerId, driverId, startOfDay, endOfDay);
+
+        List<DriverTodaysTransactionDto> salesTransactions = new ArrayList<>();
+        Map<String, Integer> totalReturnsByProduct = new HashMap<>();
+
+        for (Transaction transaction : todaysTransactions) {
+            boolean hasSales = transaction.getItems().stream().anyMatch(item -> item.getType() == ItemType.SATIS);
+
+            if (hasSales) {
+                DriverTodaysTransactionDto transactionDto = new DriverTodaysTransactionDto();
+                transactionDto.setTransactionId(transaction.getId());
+                transactionDto.setTransactionTime(transaction.getTransactionDate());
+
+                List<DriverTodaysTransactionItemDto> itemDtos = transaction.getItems().stream()
+                        .filter(item -> item.getType() == ItemType.SATIS)
+                        .map(item -> {
+                            DriverTodaysTransactionItemDto itemDto = new DriverTodaysTransactionItemDto(item.getProduct().getName());
+                            itemDto.setTotalSold(item.getQuantity());
+                            return itemDto;
+                        }).collect(Collectors.toList());
+
+                transactionDto.setItems(itemDtos);
+                salesTransactions.add(transactionDto);
+            }
+
+            transaction.getItems().stream()
+                    .filter(item -> item.getType() == ItemType.IADE)
+                    .forEach(item -> {
+                        totalReturnsByProduct.merge(item.getProduct().getName(), item.getQuantity(), Integer::sum);
+                    });
+        }
+
+        DriverDailyCustomerSummaryDto resultDto = new DriverDailyCustomerSummaryDto();
+        resultDto.setSalesTransactions(salesTransactions);
+        resultDto.setTotalReturnsByProduct(totalReturnsByProduct);
+        return resultDto;
     }
 }

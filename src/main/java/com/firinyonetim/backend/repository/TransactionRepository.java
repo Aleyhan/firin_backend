@@ -1,3 +1,4 @@
+// src/main/java/com/firinyonetim/backend/repository/TransactionRepository.java
 package com.firinyonetim.backend.repository;
 
 import com.firinyonetim.backend.entity.Transaction;
@@ -20,6 +21,19 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             "WHERE t.customer.id = :customerId " +
             "ORDER BY t.transactionDate DESC")
     List<Transaction> findByCustomerIdOrderByTransactionDateDesc(Long customerId);
+
+    // YENİ METOT: Sıralama için artan sırada getirecek.
+    @Query("SELECT DISTINCT t FROM Transaction t " +
+            "LEFT JOIN FETCH t.items item " +
+            "LEFT JOIN FETCH item.product " +
+            "LEFT JOIN FETCH t.payments " +
+            "LEFT JOIN FETCH t.customer " +
+            "LEFT JOIN FETCH t.createdBy " +
+            "LEFT JOIN FETCH t.route " +
+            "WHERE t.customer.id = :customerId " +
+            "ORDER BY t.transactionDate ASC")
+    List<Transaction> findByCustomerIdOrderByTransactionDateAsc(@Param("customerId") Long customerId);
+
 
     @Query("SELECT t FROM Transaction t " +
             "LEFT JOIN FETCH t.items " +
@@ -50,6 +64,19 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             "ORDER BY t.transactionDate DESC LIMIT 10")
     List<Transaction> findTop10ByOrderByTransactionDateDesc();
 
-    // YENİ METOT: Onay bekleyen işlemleri getirir
     List<Transaction> findByStatusOrderByTransactionDateAsc(TransactionStatus status);
+
+    // YENİ METOT: Şoförün günlük özetini almak için.
+    @Query("SELECT t FROM Transaction t " +
+            "JOIN FETCH t.items i " +
+            "JOIN FETCH i.product " +
+            "WHERE t.customer.id = :customerId " +
+            "AND t.createdBy.id = :driverId " +
+            "AND t.transactionDate >= :startOfDay AND t.transactionDate < :endOfDay")
+    List<Transaction> findTodaysTransactionsByCustomerAndDriver(
+            @Param("customerId") Long customerId,
+            @Param("driverId") Long driverId,
+            @Param("startOfDay") LocalDateTime startOfDay,
+            @Param("endOfDay") LocalDateTime endOfDay
+    );
 }

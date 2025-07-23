@@ -43,6 +43,7 @@ public class RouteController {
     }
 
     @GetMapping("/{routeId}")
+    @PreAuthorize("hasRole('YONETICI') or hasRole('SOFOR')") // <<< ROL KONTROLÜ EKLENDİ
     public ResponseEntity<RouteResponse> getRouteById(@PathVariable Long routeId) {
         return ResponseEntity.ok(routeService.getRouteById(routeId));
     }

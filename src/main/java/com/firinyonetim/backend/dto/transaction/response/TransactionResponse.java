@@ -1,3 +1,4 @@
+// src/main/java/com/firinyonetim/backend/dto/transaction/response/TransactionResponse.java
 package com.firinyonetim.backend.dto.transaction.response;
 
 import com.firinyonetim.backend.entity.TransactionStatus;
@@ -20,7 +21,9 @@ public class TransactionResponse {
     private List<TransactionItemResponse> items;
     private List<TransactionPaymentResponse> payments;
 
-    // YENİ ALANLAR
     private TransactionStatus status;
     private String rejectionReason;
+
+    // YENİ ALAN
+    private Integer dailySequenceNumber;
 }
