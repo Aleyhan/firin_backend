@@ -27,7 +27,7 @@ import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/customers")
-@PreAuthorize("hasRole('YONETICI')")
+@PreAuthorize("hasRole('YONETICI')" + " or hasRole('MUHASEBE')") // YENİ: SOFOR rolü de erişim izni verildi
 public class CustomerController {
     private final CustomerService customerService;
     private final TransactionService transactionService; // YENİ: TransactionService'i inject et

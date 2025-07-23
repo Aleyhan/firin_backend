@@ -1,3 +1,4 @@
+// src/main/java/com/firinyonetim/backend/config/SecurityConfig.java
 package com.firinyonetim.backend.config;
 
 import com.firinyonetim.backend.security.JwtAuthenticationFilter;
@@ -54,7 +55,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**").hasRole("YONETICI")
                         .requestMatchers(HttpMethod.GET, "/api/routes/{id}").hasAnyRole("YONETICI", "DEVELOPER", "SOFOR")
                         .requestMatchers(HttpMethod.GET, "/api/customers/{id}/products").hasAnyRole("YONETICI", "DEVELOPER", "SOFOR")
-                        .anyRequest().hasAnyRole("YONETICI", "DEVELOPER")
+                        // DEĞİŞİKLİK BURADA: MUHASEBE rolü eklendi
+                        .anyRequest().hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE")
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -65,7 +67,6 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // DEĞİŞİKLİK BURADA: Yeni adres listeye eklendi.
         configuration.setAllowedOrigins(Arrays.asList("http://localhost:5178", "http://192.168.1.107:5178"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type"));
