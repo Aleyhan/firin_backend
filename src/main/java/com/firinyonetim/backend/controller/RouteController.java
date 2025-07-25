@@ -21,7 +21,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/routes")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('YONETICI')")
+@PreAuthorize("hasRole('YONETICI') or hasRole('MUHASEBE')") // <<< ROL KONTROLÜ EKLENDİ
 public class RouteController {
 
     private final RouteService routeService;
@@ -43,13 +43,12 @@ public class RouteController {
     }
 
     @GetMapping("/{routeId}")
-    @PreAuthorize("hasRole('YONETICI') or hasRole('SOFOR')") // <<< ROL KONTROLÜ EKLENDİ
+    @PreAuthorize("hasRole('YONETICI') or hasRole('SOFOR') or hasRole('MUHASEBE')") // <<< ROL KONTROLÜ EKLENDİ
     public ResponseEntity<RouteResponse> getRouteById(@PathVariable Long routeId) {
         return ResponseEntity.ok(routeService.getRouteById(routeId));
     }
 
     @PutMapping("/{routeId}")
-    @PreAuthorize("hasRole('YONETICI')")
     public ResponseEntity<RouteResponse> updateRoute(
             @PathVariable Long routeId,
             @Valid @RequestBody RouteUpdateRequest request) { // <<< BURANIN RouteUpdateRequest OLDUĞUNDAN EMİN OLUN
@@ -76,7 +75,6 @@ public class RouteController {
     }
 
     @PutMapping("/{routeId}/customers")
-    @PreAuthorize("hasRole('YONETICI')")
     public ResponseEntity<Void> updateRouteCustomers(
             @PathVariable Long routeId,
             @RequestBody List<Long> customerIds) {
@@ -91,19 +89,16 @@ public class RouteController {
     }
 
     @GetMapping("/counts")
-    @PreAuthorize("hasRole('YONETICI')")
     public ResponseEntity<Map<Long, Long>> getCustomerCountsPerRoute() { // <<< DÖNÜŞ TİPİ DEĞİŞTİ
         return ResponseEntity.ok(routeService.getCustomerCountsPerRoute());
     }
 
     @PatchMapping("/{routeId}/toggle-status")
-        @PreAuthorize("hasRole('YONETICI')")
         public ResponseEntity<RouteResponse> toggleRouteStatus(@PathVariable Long routeId) {
             return ResponseEntity.ok(routeService.toggleRouteStatus(routeId));
         }
 
     @GetMapping("/{routeId}/total-debt")
-    @PreAuthorize("hasRole('YONETICI')")
     public ResponseEntity<Double> getTotalDebtForRoute(@PathVariable Long routeId) {
         double totalDebt = routeService.getTotalDebtForRoute(routeId);
         return ResponseEntity.ok(totalDebt);
@@ -111,7 +106,6 @@ public class RouteController {
 
     // YENİ ENDPOINT
     @GetMapping("/daily-summary")
-    @PreAuthorize("hasRole('YONETICI')")
     public ResponseEntity<List<RouteDailySummaryDto>> getDailySummaries(
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return ResponseEntity.ok(routeService.getDailySummaries(date));

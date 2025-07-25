@@ -13,7 +13,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/units")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('YONETICI')")
+@PreAuthorize("hasRole('YONETICI')" + " or hasRole('MUHASEBE')") // YENİ: SOFOR rolü de erişim izni verildi
 public class UnitController {
 
     private final UnitService unitService;

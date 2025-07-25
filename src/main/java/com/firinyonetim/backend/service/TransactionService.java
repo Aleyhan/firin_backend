@@ -18,6 +18,9 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.firinyonetim.backend.dto.PagedResponseDto;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -358,38 +361,40 @@ public class TransactionService {
         return transactionMapper.toTransactionResponse(updatedTransaction);
     }
 
+    // METOT İMZASI VE İÇERİĞİ TAMAMEN GÜNCELLENDİ
     @Transactional(readOnly = true)
-    public List<TransactionResponse> searchTransactions(LocalDate startDate, LocalDate endDate, Long customerId, Long routeId, TransactionStatus status) {
+    public PagedResponseDto<TransactionResponse> searchTransactions(LocalDate startDate, LocalDate endDate, Long customerId, Long routeId, TransactionStatus status, Pageable pageable) {
         Specification<Transaction> spec = Specification.where(null);
 
         if (startDate != null) {
             spec = spec.and((root, query, criteriaBuilder) ->
                     criteriaBuilder.greaterThanOrEqualTo(root.get("transactionDate"), startDate.atStartOfDay()));
         }
-
         if (endDate != null) {
             spec = spec.and((root, query, criteriaBuilder) ->
                     criteriaBuilder.lessThanOrEqualTo(root.get("transactionDate"), endDate.atTime(23, 59, 59)));
         }
-
         if (customerId != null) {
             spec = spec.and((root, query, criteriaBuilder) ->
                     criteriaBuilder.equal(root.get("customer").get("id"), customerId));
         }
-
         if (routeId != null) {
             spec = spec.and((root, query, criteriaBuilder) ->
                     criteriaBuilder.equal(root.get("route").get("id"), routeId));
         }
-
         if (status != null) {
             spec = spec.and((root, query, criteriaBuilder) ->
                     criteriaBuilder.equal(root.get("status"), status));
         }
 
-        List<Transaction> transactions = transactionRepository.findAll(spec);
-        transactions.sort(Comparator.comparing(Transaction::getTransactionDate));
-        return populateDailySequenceNumbers(transactions);
+        // Veritabanından sadece istenen sayfayı çekiyoruz.
+        Page<Transaction> transactionPage = transactionRepository.findAll(spec, pageable);
+
+        // Gelen sayfayı DTO'ya çeviriyoruz.
+        Page<TransactionResponse> dtoPage = transactionPage.map(transactionMapper::toTransactionResponse);
+
+        // Kendi PagedResponseDto'muza dönüştürüp geri döndürüyoruz.
+        return new PagedResponseDto<>(dtoPage);
     }
 
     private List<TransactionResponse> populateDailySequenceNumbers(List<Transaction> transactions) {

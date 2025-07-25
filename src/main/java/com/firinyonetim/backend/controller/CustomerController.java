@@ -46,7 +46,6 @@ public class CustomerController {
     }
 
     @PostMapping("/{customerId}/tax-info")
-    @PreAuthorize("hasRole('YONETICI')")
     public ResponseEntity<CustomerResponse> createTaxInfoForCustomer(
             @PathVariable Long customerId,
             @Valid @RequestBody TaxInfoRequest taxInfoRequest) {
@@ -80,7 +79,6 @@ public class CustomerController {
 
     // YENİ ENDPOINT: Müşterinin hesap ekstresini (ledger) getirir.
     @GetMapping("/{customerId}/ledger")
-    @PreAuthorize("hasRole('YONETICI')")
     public ResponseEntity<List<TransactionResponse>> getCustomerLedger(@PathVariable Long customerId) {
         List<TransactionResponse> transactions = transactionService.getTransactionsByCustomerId(customerId);
         return ResponseEntity.ok(transactions);
@@ -107,7 +105,6 @@ public class CustomerController {
 
     // YENİ ENDPOINT: Müşterinin vergi bilgilerini kısmi olarak günceller.
     @PatchMapping("/{customerId}/tax-info")
-    @PreAuthorize("hasRole('YONETICI')")
     public ResponseEntity<CustomerResponse> updateCustomerTaxInfo(
             @PathVariable Long customerId,
             @RequestBody Map<String, String> updates) {
@@ -116,7 +113,6 @@ public class CustomerController {
 
     // YENİ ENDPOINT: Müşterinin adresini kısmi olarak günceller.
     @PatchMapping("/{customerId}/address")
-    @PreAuthorize("hasRole('YONETICI')")
     public ResponseEntity<CustomerResponse> updateCustomerAddress(
             @PathVariable Long customerId,
             @RequestBody Map<String, String> updates) {
@@ -124,7 +120,6 @@ public class CustomerController {
     }
 
     @PostMapping("/{customerId}/address")
-    @PreAuthorize("hasRole('YONETICI')")
     public ResponseEntity<CustomerResponse> createAddressForCustomer(
             @PathVariable Long customerId,
             @RequestBody @Valid AddressRequest addressRequest) {
@@ -132,7 +127,6 @@ public class CustomerController {
     }
 
     @PostMapping("/{customerId}/routes")
-    @PreAuthorize("hasRole('YONETICI')")
     public ResponseEntity<Void> assignRoutesToCustomer(
             @PathVariable Long customerId,
             @RequestBody List<Long> routeIds) {
@@ -141,7 +135,6 @@ public class CustomerController {
     }
 
     @PatchMapping("/{customerId}/workdays")
-    @PreAuthorize("hasRole('YONETICI')")
     public ResponseEntity<CustomerResponse> updateCustomerWorkdays(
             @PathVariable Long customerId,
             @RequestBody List<String> workdays) {
@@ -150,7 +143,6 @@ public class CustomerController {
     }
 
     @PatchMapping("/{customerId}/irsaliye-gunleri")
-    @PreAuthorize("hasRole('YONETICI')")
     public ResponseEntity<CustomerResponse> updateCustomerIrsaliyeGunleri(
             @PathVariable Long customerId,
             @RequestBody List<String> irsaliyeGunleri) {
@@ -160,7 +152,6 @@ public class CustomerController {
 
     // CustomerController.java içinde...
     @PutMapping("/{customerId}/products") // PUT, çünkü bu işlem "oluştur veya güncelle" (upsert) mantığında.
-    @PreAuthorize("hasRole('YONETICI')")
     public ResponseEntity<CustomerProductAssignmentResponse> assignOrUpdateProductToCustomer(
             @PathVariable Long customerId,
             @RequestBody CustomerProductAssignmentRequest request) {
@@ -171,13 +162,12 @@ public class CustomerController {
 
     // YENİ ENDPOINT: Bir müşteriye atanmış tüm ürünleri ve kurallarını listeler.
     @GetMapping("/{customerId}/products")
-    @PreAuthorize("hasRole('YONETICI') or hasRole('SOFOR')")
+    @PreAuthorize("hasRole('YONETICI') or hasRole('SOFOR') or hasRole('MUHASEBE')")
     public ResponseEntity<List<CustomerProductAssignmentResponse>> getCustomerProductAssignments(@PathVariable Long customerId) {
         return ResponseEntity.ok(customerService.getCustomerProductAssignments(customerId));
     }
 
     @DeleteMapping("/{customerId}/products/{productId}")
-    @PreAuthorize("hasRole('YONETICI')")
     public ResponseEntity<Void> removeAssignedProduct(
             @PathVariable Long customerId,
             @PathVariable Long productId) {

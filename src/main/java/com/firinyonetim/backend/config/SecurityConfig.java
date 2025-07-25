@@ -52,9 +52,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**", "/api/health").permitAll()
                         .requestMatchers("/api/driver/**").hasRole("SOFOR")
-                        .requestMatchers("/api/admin/**").hasRole("YONETICI")
-                        .requestMatchers(HttpMethod.GET, "/api/routes/{id}").hasAnyRole("YONETICI", "DEVELOPER", "SOFOR")
-                        .requestMatchers(HttpMethod.GET, "/api/customers/{id}/products").hasAnyRole("YONETICI", "DEVELOPER", "SOFOR")
+                        .requestMatchers("/api/admin/**").hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE")
+                        .requestMatchers(HttpMethod.GET, "/api/routes/{id}").hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE")
+                        .requestMatchers(HttpMethod.GET, "/api/customers/{id}/products").hasAnyRole("YONETICI", "DEVELOPER", "SOFOR", "MUHASEBE")
                         // DEĞİŞİKLİK BURADA: MUHASEBE rolü eklendi
                         .anyRequest().hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE")
                 )

@@ -15,25 +15,23 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER', 'MUHASEBE')") // DEĞİŞİKLİK BURADA
 public class AdminController {
 
     private final TransactionService transactionService;
     private final RouteService routeService;
 
     @GetMapping("/pending-transactions")
-    @PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER', 'MUHASEBE')") // DEĞİŞİKLİK BURADA
     public ResponseEntity<List<TransactionResponse>> getPendingTransactions() {
         return ResponseEntity.ok(transactionService.getPendingTransactions());
     }
 
     @PostMapping("/transactions/{transactionId}/approve")
-    @PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER', 'MUHASEBE')") // DEĞİŞİKLİK BURADA
     public ResponseEntity<TransactionResponse> approveTransaction(@PathVariable Long transactionId) {
         return ResponseEntity.ok(transactionService.approveTransaction(transactionId));
     }
 
     @PostMapping("/transactions/{transactionId}/reject")
-    @PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER', 'MUHASEBE')") // DEĞİŞİKLİK BURADA
     public ResponseEntity<TransactionResponse> rejectTransaction(@PathVariable Long transactionId, @RequestBody Map<String, String> payload) {
         String reason = payload.get("reason");
         if (reason == null || reason.isBlank()) {
@@ -43,7 +41,6 @@ public class AdminController {
     }
 
     @PutMapping("/routes/{routeId}/delivery-order")
-    @PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER')") // Bu endpoint muhasebe için gereksiz, olduğu gibi kalabilir.
     public ResponseEntity<Void> updateDeliveryOrder(@PathVariable Long routeId, @RequestBody List<Long> orderedCustomerIds) {
         routeService.updateDeliveryOrder(routeId, orderedCustomerIds);
         return ResponseEntity.ok().build();

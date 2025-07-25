@@ -16,7 +16,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/products")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('YONETICI')")
+@PreAuthorize("hasRole('YONETICI')" + " or hasRole('MUHASEBE')") // YENİ: SOFOR rolü de erişim izni verildi
 public class ProductController {
     private final ProductService productService;
 

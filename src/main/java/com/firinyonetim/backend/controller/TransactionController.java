@@ -1,13 +1,16 @@
+// src/main/java/com/firinyonetim/backend/controller/TransactionController.java
 package com.firinyonetim.backend.controller;
 
+import com.firinyonetim.backend.dto.PagedResponseDto; // YENİ IMPORT
 import com.firinyonetim.backend.dto.transaction.request.TransactionCreateRequest;
 import com.firinyonetim.backend.dto.transaction.request.TransactionItemPriceUpdateRequest;
 import com.firinyonetim.backend.dto.transaction.request.TransactionUpdateRequest;
 import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
-import com.firinyonetim.backend.entity.TransactionStatus; // YENİ IMPORT
+import com.firinyonetim.backend.entity.TransactionStatus;
 import com.firinyonetim.backend.service.TransactionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable; // YENİ IMPORT
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,7 +23,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/transactions")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('YONETICI')")
+@PreAuthorize("hasRole('YONETICI') or hasRole('MUHASEBE')") // Rolleri genişletelim
 public class TransactionController {
 
     private final TransactionService transactionService;
@@ -31,6 +34,7 @@ public class TransactionController {
     }
 
     @DeleteMapping("/{transactionId}")
+    @PreAuthorize("hasRole('YONETICI')")
     public ResponseEntity<Void> deleteTransaction(@PathVariable Long transactionId) {
         transactionService.deleteTransaction(transactionId);
         return ResponseEntity.noContent().build();
@@ -56,15 +60,16 @@ public class TransactionController {
         return ResponseEntity.ok(transactionService.updateTransaction(transactionId, request));
     }
 
-    // METOT İMZASI GÜNCELLENDİ
+    // METOT İMZASI TAMAMEN GÜNCELLENDİ
     @GetMapping("/search")
-    public ResponseEntity<List<TransactionResponse>> searchTransactions(
+    public ResponseEntity<PagedResponseDto<TransactionResponse>> searchTransactions(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(required = false) Long customerId,
             @RequestParam(required = false) Long routeId,
-            @RequestParam(required = false) TransactionStatus status) { // YENİ PARAMETRE
-        List<TransactionResponse> results = transactionService.searchTransactions(startDate, endDate, customerId, routeId, status);
+            @RequestParam(required = false) TransactionStatus status,
+            Pageable pageable) { // YENİ PARAMETRE
+        PagedResponseDto<TransactionResponse> results = transactionService.searchTransactions(startDate, endDate, customerId, routeId, status, pageable);
         return ResponseEntity.ok(results);
     }
 }

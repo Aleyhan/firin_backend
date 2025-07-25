@@ -14,6 +14,7 @@ import com.firinyonetim.backend.service.TransactionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,6 +24,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/driver")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('YONETICI')" + " or hasRole('MUHASEBE')" + " or hasRole('SOFOR')") // YENİ: SOFOR rolü de erişim izni verildi
 public class DriverController {
 
     private final RouteService routeService;
