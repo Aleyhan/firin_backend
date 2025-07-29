@@ -1,5 +1,6 @@
 package com.firinyonetim.backend.controller;
 
+import com.firinyonetim.backend.dto.PagedResponseDto;
 import com.firinyonetim.backend.dto.customer.request.CustomerCreateRequest;
 import com.firinyonetim.backend.dto.customer.request.CustomerProductAssignmentRequest;
 import com.firinyonetim.backend.dto.customer.request.CustomerUpdateRequest;
@@ -13,7 +14,7 @@ import com.firinyonetim.backend.service.CustomerService;
 import com.firinyonetim.backend.service.RouteService;
 import com.firinyonetim.backend.service.TransactionService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -21,23 +22,30 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import com.firinyonetim.backend.dto.address.request.AddressRequest;
-import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/customers")
-@PreAuthorize("hasRole('YONETICI')" + " or hasRole('MUHASEBE')") // YENİ: SOFOR rolü de erişim izni verildi
+@PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER', 'MUHASEBE')")
 public class CustomerController {
     private final CustomerService customerService;
-    private final TransactionService transactionService; // YENİ: TransactionService'i inject et
-    private final RouteService routeService; // YENİ: RouteService'i inject et
+    private final TransactionService transactionService;
+    private final RouteService routeService;
 
-    public CustomerController(CustomerService customerService, TransactionService transactionService,
-                              RouteService routeService) {
+    public CustomerController(CustomerService customerService, TransactionService transactionService, RouteService routeService) {
         this.customerService = customerService;
         this.transactionService = transactionService;
         this.routeService = routeService;
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<PagedResponseDto<CustomerResponse>> searchCustomers(
+            @RequestParam(required = false) String searchTerm,
+            @RequestParam(required = false) Long routeId,
+            @RequestParam(required = false) Boolean status,
+            Pageable pageable) {
+        PagedResponseDto<CustomerResponse> results = customerService.searchCustomers(searchTerm, routeId, status, pageable);
+        return ResponseEntity.ok(results);
     }
 
     @PostMapping
@@ -59,8 +67,6 @@ public class CustomerController {
         return ResponseEntity.ok(customerService.updateCustomer(customerId, request));
     }
 
-    // ... CustomerController sınıfının içinde ...
-
     @GetMapping
     public ResponseEntity<List<CustomerResponse>> getAllCustomers() {
         return ResponseEntity.ok(customerService.getAllCustomers());
@@ -77,7 +83,6 @@ public class CustomerController {
         return ResponseEntity.noContent().build();
     }
 
-    // YENİ ENDPOINT: Müşterinin hesap ekstresini (ledger) getirir.
     @GetMapping("/{customerId}/ledger")
     public ResponseEntity<List<TransactionResponse>> getCustomerLedger(@PathVariable Long customerId) {
         List<TransactionResponse> transactions = transactionService.getTransactionsByCustomerId(customerId);
@@ -90,7 +95,6 @@ public class CustomerController {
         return ResponseEntity.ok(response);
     }
 
-    // controller/CustomerController.java
     @GetMapping("/{customerId}/routes")
     public ResponseEntity<List<RouteResponse>> getRoutesByCustomer(@PathVariable Long customerId) {
         return ResponseEntity.ok(routeService.getRoutesByCustomer(customerId));
@@ -103,7 +107,6 @@ public class CustomerController {
         return ResponseEntity.ok(customerService.updateCustomerFields(customerId, updates));
     }
 
-    // YENİ ENDPOINT: Müşterinin vergi bilgilerini kısmi olarak günceller.
     @PatchMapping("/{customerId}/tax-info")
     public ResponseEntity<CustomerResponse> updateCustomerTaxInfo(
             @PathVariable Long customerId,
@@ -111,7 +114,6 @@ public class CustomerController {
         return ResponseEntity.ok(customerService.updateCustomerTaxInfo(customerId, updates));
     }
 
-    // YENİ ENDPOINT: Müşterinin adresini kısmi olarak günceller.
     @PatchMapping("/{customerId}/address")
     public ResponseEntity<CustomerResponse> updateCustomerAddress(
             @PathVariable Long customerId,
@@ -150,19 +152,15 @@ public class CustomerController {
         return ResponseEntity.ok(response);
     }
 
-    // CustomerController.java içinde...
-    @PutMapping("/{customerId}/products") // PUT, çünkü bu işlem "oluştur veya güncelle" (upsert) mantığında.
+    @PutMapping("/{customerId}/products")
     public ResponseEntity<CustomerProductAssignmentResponse> assignOrUpdateProductToCustomer(
             @PathVariable Long customerId,
             @RequestBody CustomerProductAssignmentRequest request) {
         return ResponseEntity.ok(customerService.assignOrUpdateProductToCustomer(customerId, request));
     }
 
-    // CustomerController.java içinde...
-
-    // YENİ ENDPOINT: Bir müşteriye atanmış tüm ürünleri ve kurallarını listeler.
     @GetMapping("/{customerId}/products")
-    @PreAuthorize("hasRole('YONETICI') or hasRole('SOFOR') or hasRole('MUHASEBE')")
+    @PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER', 'SOFOR', 'MUHASEBE')")
     public ResponseEntity<List<CustomerProductAssignmentResponse>> getCustomerProductAssignments(@PathVariable Long customerId) {
         return ResponseEntity.ok(customerService.getCustomerProductAssignments(customerId));
     }
@@ -174,5 +172,4 @@ public class CustomerController {
         customerService.removeAssignedProduct(customerId, productId);
         return ResponseEntity.noContent().build();
     }
-
 }

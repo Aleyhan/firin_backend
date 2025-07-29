@@ -1,5 +1,6 @@
 package com.firinyonetim.backend.service;
 
+import com.firinyonetim.backend.dto.PagedResponseDto;
 import com.firinyonetim.backend.dto.address.request.AddressRequest;
 import com.firinyonetim.backend.dto.customer.request.CustomerCreateRequest;
 import com.firinyonetim.backend.dto.customer.request.CustomerProductAssignmentRequest;
@@ -13,22 +14,24 @@ import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.mapper.*;
 import com.firinyonetim.backend.repository.*;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.firinyonetim.backend.entity.RouteAssignment;
-import java.util.Map;
-import static java.util.stream.Collectors.groupingBy;
-import static java.util.stream.Collectors.mapping;
-import static java.util.stream.Collectors.toList;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.DayOfWeek;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static java.util.stream.Collectors.*;
 
 
 @Service
@@ -37,39 +40,76 @@ public class CustomerService {
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
     private final CustomerMapper customerMapper;
-    private final ProductMapper productMapper;
     private final TaxInfoRepository taxInfoRepository;
-    private final TaxInfoMapper taxInfoMapper;
-    private final AddressMapper addressMapper; // Yeni eklenen AddressMapper
+    private final AddressMapper addressMapper;
     private final TransactionPaymentRepository transactionPaymentRepository;
     private final RouteRepository routeRepository;
     private final RouteAssignmentRepository routeAssignmentRepository;
     private final CustomerProductAssignmentRepository customerProductAssignmentRepository;
     private final CustomerProductAssignmentMapper customerProductAssignmentMapper;
+    private final TaxInfoMapper taxInfoMapper;
 
 
+    @Transactional(readOnly = true)
+    public PagedResponseDto<CustomerResponse> searchCustomers(String searchTerm, Long routeId, Boolean status, Pageable pageable) {
+        Specification<Customer> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
 
+            if (StringUtils.hasText(searchTerm)) {
+                String likePattern = "%" + searchTerm.toLowerCase() + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("name")), likePattern),
+                        cb.like(cb.lower(root.get("customerCode")), likePattern)
+                ));
+            }
 
-    public List<CustomerResponse> getAllCustomers() {
-        List<Customer> customers = customerRepository.findAll();
+            if (routeId != null) {
+                Subquery<Long> subquery = query.subquery(Long.class);
+                Root<RouteAssignment> subRoot = subquery.from(RouteAssignment.class);
+                subquery.select(subRoot.get("customer").get("id"));
+                subquery.where(cb.equal(subRoot.get("route").get("id"), routeId));
+                predicates.add(root.get("id").in(subquery));
+            }
 
-        // Tüm rota atamalarını tek bir sorgu ile çek.
-        List<RouteAssignment> allAssignments = routeAssignmentRepository.findAll();
+            if (status != null) {
+                predicates.add(cb.equal(root.get("isActive"), status));
+            }
 
-        // Müşteri ID'sine göre rota ID'lerini gruplayan bir harita oluştur.
-        // Örn: { 101L -> [1L, 2L], 102L -> [2L] }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        Page<Customer> customerPage = customerRepository.findAll(spec, pageable);
+
+        List<RouteAssignment> allAssignments = routeAssignmentRepository.findAllWithDetails();
         Map<Long, List<Long>> customerToRouteIdsMap = allAssignments.stream()
                 .collect(groupingBy(
                         assignment -> assignment.getCustomer().getId(),
                         mapping(assignment -> assignment.getRoute().getId(), toList())
                 ));
 
-        // Her bir müşteri için DTO oluştururken, haritadan rota ID'lerini ekle.
+        Page<CustomerResponse> dtoPage = customerPage.map(customer -> {
+            CustomerResponse response = customerMapper.toCustomerResponse(customer);
+            response.setRouteIds(customerToRouteIdsMap.getOrDefault(customer.getId(), Collections.emptyList()));
+            return response;
+        });
+
+        return new PagedResponseDto<>(dtoPage);
+    }
+
+
+    public List<CustomerResponse> getAllCustomers() {
+        List<Customer> customers = customerRepository.findAll();
+        List<RouteAssignment> allAssignments = routeAssignmentRepository.findAll();
+
+        Map<Long, List<Long>> customerToRouteIdsMap = allAssignments.stream()
+                .collect(groupingBy(
+                        assignment -> assignment.getCustomer().getId(),
+                        mapping(assignment -> assignment.getRoute().getId(), toList())
+                ));
+
         return customers.stream()
                 .map(customer -> {
                     CustomerResponse response = customerMapper.toCustomerResponse(customer);
-                    // Müşterinin rota ID'lerini haritadan al ve DTO'ya set et.
-                    // Eğer müşteri hiçbir rotaya atanmamışsa, boş bir liste ata.
                     response.setRouteIds(customerToRouteIdsMap.getOrDefault(customer.getId(), List.of()));
                     return response;
                 })
@@ -79,7 +119,15 @@ public class CustomerService {
     public CustomerResponse getCustomerById(Long customerId) {
         Customer customer = customerRepository.findById(customerId)
                 .orElseThrow(() -> new EntityNotFoundException("Customer not found with id: " + customerId));
-        return customerMapper.toCustomerResponse(customer);
+        CustomerResponse response = customerMapper.toCustomerResponse(customer);
+
+        List<Long> routeIds = routeAssignmentRepository.findByCustomerId(customerId)
+                .stream()
+                .map(ra -> ra.getRoute().getId())
+                .collect(Collectors.toList());
+        response.setRouteIds(routeIds);
+
+        return response;
     }
 
     @Transactional
@@ -88,18 +136,12 @@ public class CustomerService {
         if (customerRepository.existsByCustomerCode(request.getCustomerCode())) {
             throw new IllegalStateException("Customer code " + request.getCustomerCode() + " is already in use.");
         }
-        // 1. Gelen DTO'yu ana Customer entity'sine çevir.
-        // CustomerMapper, içindeki TaxInfoRequest ve AddressRequest'leri de çevirecektir.
         Customer customer = customerMapper.toCustomer(request);
 
-        // Vergi bilgisinin customer referansını set et.
         if (customer.getTaxInfo() != null) {
             customer.getTaxInfo().setCustomer(customer);
         }
 
-        // --- DÜZELTME BURADA ---
-        // workingDays koleksiyonunu manuel olarak DTO'dan alıp entity'e set ediyoruz.
-        // Bu, mapper'ın eksik bıraktığı işi tamamlar.
         if (request.getWorkingDays() != null) {
             customer.setWorkingDays(new HashSet<>(request.getWorkingDays()));
         } else {
@@ -112,25 +154,9 @@ public class CustomerService {
             customer.setIrsaliyeGunleri(EnumSet.allOf(com.firinyonetim.backend.entity.DayOfWeek.class));
         }
 
-        if (customer.getTaxInfo() != null) {
-            customer.getTaxInfo().setCustomer(customer);
-        }
-
-        if (customer.getTaxInfo() != null) {
-            customer.getTaxInfo().setCustomer(customer);
-        }
-
-
-
-        // 3. Müşteriyi kaydet. Cascade ayarları sayesinde ilişkili tüm varlıklar da kaydedilecek.
         Customer savedCustomer = customerRepository.save(customer);
 
-        System.out.println("After Save - Saved Entity workingDays: " + savedCustomer.getWorkingDays());
-
         CustomerResponse response = customerMapper.toCustomerResponse(savedCustomer);
-
-        // --- DEBUG 3 ---
-        System.out.println("After Mapping to Response - Response DTO workingDays: " + response.getWorkingDays());
 
         return response;
     }
@@ -144,69 +170,50 @@ public class CustomerService {
 
     @Transactional
     public CustomerResponse updateCustomer(Long customerId, CustomerUpdateRequest request) {
-        // 1. Güncellenecek müşteriyi veritabanından bul
         Customer customer = customerRepository.findById(customerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
 
-        // 2. Müşterinin temel alanlarını güncelle
-        // customerCode'un güncellenmesine izin vermiyoruz.
         customer.setName(request.getName());
         customer.setPhone(request.getPhone());
         customer.setEmail(request.getEmail());
         customer.setActive(request.getIsActive());
-        customer.setNotes(request.getNotes()); // Notes alanını güncellemeyi ekleyelim.
+        customer.setNotes(request.getNotes());
 
-        // 3. Vergi Bilgisini Güvenli Bir Şekilde Güncelle/Oluştur
         if (request.getTaxInfo() != null) {
             TaxInfo taxInfo = customer.getTaxInfo();
             if (taxInfo == null) {
-                // Eğer müşterinin daha önce vergi bilgisi yoksa, yeni bir tane oluştur
                 taxInfo = new TaxInfo();
                 taxInfo.setCustomer(customer);
                 customer.setTaxInfo(taxInfo);
             }
-            // Alanları güncelle
             taxInfo.setTradeName(request.getTaxInfo().getTradeName());
             taxInfo.setTaxNumber(request.getTaxInfo().getTaxNumber());
             taxInfo.setTaxOffice(request.getTaxInfo().getTaxOffice());
         } else if (customer.getTaxInfo() != null) {
-            // Eğer request'te taxInfo null gelirse ve müşterinin vergi bilgisi varsa, onu sil.
             customer.setTaxInfo(null);
         }
 
-        // 4. Adresleri Güvenli Bir Şekilde Güncelle/Ekle/Sil
-        // Önce mevcut adres listesini temizle. orphanRemoval=true sayesinde
-        // listeden çıkarılan adresler veritabanından silinecek.
-        // 4. ADRESİ GÜNCELLEME (YENİ YAKLAŞIM)
         if (request.getAddress() != null) {
             Address address = customer.getAddress();
             if (address == null) {
-                // Müşterinin adresi yoksa, yeni bir tane oluştur.
                 address = new Address();
                 customer.setAddress(address);
             }
-            // Alanları güncelle
             address.setDetails(request.getAddress().getDetails());
             address.setProvince(request.getAddress().getProvince());
             address.setDistrict(request.getAddress().getDistrict());
         } else {
-            // Eğer request'te adres null gelirse, müşterinin mevcut adresini sil.
             customer.setAddress(null);
         }
 
         if (request.getWorkingDays() != null) {
-            // Manuel olarak DTO'dan gelen set'i atıyoruz.
-            // Bu, 'clear' ve 'addAll' yapmaktan daha güvenilir olabilir.
             customer.setWorkingDays(new HashSet<>(request.getWorkingDays()));
         }
 
-        // 5. Değişiklikleri kaydet. @Transactional sayesinde tüm değişiklikler tek seferde işlenir.
         Customer updatedCustomer = customerRepository.save(customer);
 
         return customerMapper.toCustomerResponse(updatedCustomer);
     }
-
-    // ... CustomerService sınıfının içinde ...
 
     @Transactional
     public void deleteCustomer(Long customerId) {
@@ -245,21 +252,16 @@ public class CustomerService {
                             }
                             String newCode = (String) value;
 
-                            // 1. Uzunluk Kontrolü
                             if (newCode.length() != 4) {
                                 throw new IllegalArgumentException("Müşteri kodu tam olarak 4 haneli olmalıdır.");
                             }
 
-                            // 2. Benzersizlik (Unique) Kontrolü
-                            // Yeni kodun, mevcut müşteri dışındaki başka bir müşteriye ait olup olmadığını kontrol et
                             if (customerRepository.existsByCustomerCodeAndIdNot(newCode, customer.getId())) {
                                 throw new IllegalStateException("Müşteri kodu '" + newCode + "' zaten başka bir müşteri tarafından kullanılıyor.");
                             }
 
-                            // Validasyonlar başarılıysa, kodu güncelle
                             customer.setCustomerCode(newCode);
                             break;
-                        // YENİ EKLENEN BLOK SONU
                     }
                 }
         );
@@ -268,18 +270,14 @@ public class CustomerService {
         return customerMapper.toCustomerResponse(updatedCustomer);
     }
 
-    // YENİ METOT
     @Transactional
     public CustomerResponse updateCustomerTaxInfo(Long customerId, Map<String, String> updates) {
         Customer customer = customerRepository.findById(customerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
 
-        // Müşterinin mevcut vergi bilgisini al veya yoksa yeni bir tane oluştur.
         TaxInfo taxInfo = customer.getTaxInfo();
         if (taxInfo == null) {
-            // Eğer request'te en az bir alan varsa yeni TaxInfo oluştur.
             if (updates == null || updates.isEmpty()) {
-                // Güncellenecek bir şey yoksa, müşteriyi olduğu gibi döndür.
                 return customerMapper.toCustomerResponse(customer);
             }
             taxInfo = new TaxInfo();
@@ -287,10 +285,9 @@ public class CustomerService {
             customer.setTaxInfo(taxInfo);
         }
 
-        final TaxInfo finalTaxInfo = taxInfo; // Lambda içinde kullanmak için
+        final TaxInfo finalTaxInfo = taxInfo;
 
         updates.forEach((key, value) -> {
-            // Değerin boş veya null olmamasını kontrol edelim.
             if (value == null || value.trim().isEmpty()) {
                 throw new IllegalArgumentException("'" + key + "' alanı boş olamaz.");
             }
@@ -303,20 +300,16 @@ public class CustomerService {
                     finalTaxInfo.setTaxOffice(value);
                     break;
                 case "taxNumber":
-                    // Benzersizlik kontrolü
                     if (taxInfoRepository.existsByTaxNumberAndCustomerIdNot(value, customerId)) {
                         throw new IllegalStateException("Vergi numarası '" + value + "' zaten başka bir müşteri tarafından kullanılıyor.");
                     }
                     finalTaxInfo.setTaxNumber(value);
                     break;
                 default:
-                    // Bilinmeyen bir anahtar gelirse hata fırlatabilir veya görmezden gelebiliriz.
-                    // Şimdilik görmezden gelelim.
                     break;
             }
         });
 
-        // TaxInfo'nun kaydedilmesi için ana Customer nesnesini kaydetmek yeterlidir (Cascade ayarı sayesinde).
         Customer updatedCustomer = customerRepository.save(customer);
         return customerMapper.toCustomerResponse(updatedCustomer);
     }
@@ -350,7 +343,6 @@ public class CustomerService {
                         finalAddress.setDistrict(value);
                         break;
                     default:
-                        // Bilinmeyen anahtarları yoksay
                         break;
                 }
             }
@@ -381,8 +373,6 @@ public class CustomerService {
         return customerMapper.toCustomerResponse(updatedCustomer);
     }
 
-    // src/main/java/com/firinyonetim/backend/service/CustomerService.java
-
     @Transactional
     public CustomerResponse createAddressForCustomer(Long customerId, AddressRequest addressRequest) {
         Customer customer = customerRepository.findById(customerId)
@@ -406,7 +396,6 @@ public class CustomerService {
         for (Long routeId : routeIds) {
             Route route = routeRepository.findById(routeId)
                     .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + routeId));
-            // Check if assignment already exists to avoid duplicates
             boolean exists = routeAssignmentRepository.findByCustomerId(customerId).stream()
                     .anyMatch(ra -> ra.getRoute().getId().equals(routeId));
             if (!exists) {
@@ -456,26 +445,22 @@ public class CustomerService {
         return customerMapper.toCustomerResponse(updatedCustomer);
     }
 
-    // CustomerService.java içinde...
     @Transactional
     public CustomerProductAssignmentResponse assignOrUpdateProductToCustomer(Long customerId, CustomerProductAssignmentRequest request) {
         Customer customer = customerRepository.findById(customerId)
-            .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
         Product product = productRepository.findById(request.getProductId())
-            .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + request.getProductId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + request.getProductId()));
 
-        // Mevcut atamayı bul veya yenisini oluştur.
         CustomerProductAssignment assignment = customerProductAssignmentRepository
                 .findByCustomerIdAndProductId(customerId, request.getProductId())
                 .orElse(new CustomerProductAssignment());
 
-        // Alanları set et.
         assignment.setCustomer(customer);
         assignment.setProduct(product);
         assignment.setPricingType(request.getPricingType());
-        assignment.setSpecialPrice(request.getSpecialPrice()); // null olabilir
+        assignment.setSpecialPrice(request.getSpecialPrice());
 
-        // Kaydet ve DTO'ya çevirip döndür.
         CustomerProductAssignment savedAssignment = customerProductAssignmentRepository.save(assignment);
         return customerProductAssignmentMapper.toResponse(savedAssignment);
     }
@@ -487,31 +472,25 @@ public class CustomerService {
 
         List<CustomerProductAssignment> assignments = customerProductAssignmentRepository.findByCustomerId(customerId);
 
-        // DEĞİŞİKLİK BURADA: DTO'ya çevirirken nihai fiyatı hesapla
         return assignments.stream()
                 .map(assignment -> {
-                    // Önce temel alanları mapper ile doldur
                     CustomerProductAssignmentResponse response = customerProductAssignmentMapper.toResponse(assignment);
 
-                    // Fiyat hesaplama mantığı
                     Product product = assignment.getProduct();
                     BigDecimal priceToUse = assignment.getSpecialPrice() != null ? assignment.getSpecialPrice() : product.getBasePrice();
 
                     BigDecimal finalPrice;
                     if (assignment.getPricingType() == PricingType.VAT_INCLUDED) {
-                        // Fiyat zaten KDV dahil, olduğu gibi al.
                         finalPrice = priceToUse;
-                    } else { // VAT_EXCLUSIVE
+                    } else {
                         if (product.getVatRate() == null || product.getVatRate() < 0) {
                             throw new IllegalStateException("Ürün '" + product.getName() + "' için geçerli bir KDV oranı tanımlanmamış.");
                         }
-                        // KDV'yi hesapla ve ekle
                         BigDecimal vatRate = BigDecimal.valueOf(product.getVatRate()).divide(new BigDecimal("100"));
                         BigDecimal vatAmount = priceToUse.multiply(vatRate);
                         finalPrice = priceToUse.add(vatAmount);
                     }
 
-                    // Hesaplanan nihai fiyatı DTO'ya set et (2 ondalık basamağa yuvarlamak iyi bir pratiktir)
                     response.setFinalUnitPrice(finalPrice.setScale(2, RoundingMode.HALF_UP));
 
                     return response;
