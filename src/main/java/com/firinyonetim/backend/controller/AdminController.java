@@ -1,4 +1,3 @@
-// src/main/java/com/firinyonetim/backend/controller/AdminController.java
 package com.firinyonetim.backend.controller;
 
 import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
@@ -6,7 +5,7 @@ import com.firinyonetim.backend.service.RouteService;
 import com.firinyonetim.backend.service.TransactionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize; // Import'u ekleyin
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -15,7 +14,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER', 'MUHASEBE')") // DEĞİŞİKLİK BURADA
+@PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER', 'MUHASEBE')")
 public class AdminController {
 
     private final TransactionService transactionService;
@@ -35,7 +34,7 @@ public class AdminController {
     public ResponseEntity<TransactionResponse> rejectTransaction(@PathVariable Long transactionId, @RequestBody Map<String, String> payload) {
         String reason = payload.get("reason");
         if (reason == null || reason.isBlank()) {
-            throw new IllegalArgumentException("Reddetme sebebi boş olamaz.");
+            throw new IllegalArgumentException("Reddetme/iptal sebebi boş olamaz.");
         }
         return ResponseEntity.ok(transactionService.rejectTransaction(transactionId, reason));
     }

@@ -1,11 +1,13 @@
-// src/main/java/com/firinyonetim/backend/service/TransactionService.java
 package com.firinyonetim.backend.service;
 
+import com.firinyonetim.backend.dto.PagedResponseDto;
 import com.firinyonetim.backend.dto.driver.response.DriverDailyCustomerSummaryDto;
 import com.firinyonetim.backend.dto.driver.response.DriverTodaysTransactionDto;
 import com.firinyonetim.backend.dto.driver.response.DriverTodaysTransactionItemDto;
 import com.firinyonetim.backend.dto.transaction.request.TransactionCreateRequest;
 import com.firinyonetim.backend.dto.transaction.request.TransactionItemPriceUpdateRequest;
+import com.firinyonetim.backend.dto.transaction.request.TransactionItemUpdateRequest;
+import com.firinyonetim.backend.dto.transaction.request.TransactionPaymentUpdateRequest;
 import com.firinyonetim.backend.dto.transaction.request.TransactionUpdateRequest;
 import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
 import com.firinyonetim.backend.entity.*;
@@ -13,14 +15,13 @@ import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.mapper.TransactionMapper;
 import com.firinyonetim.backend.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.firinyonetim.backend.dto.PagedResponseDto;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -41,19 +42,18 @@ public class TransactionService {
     private final TransactionItemRepository transactionItemRepository;
     private final CustomerProductAssignmentRepository customerProductAssignmentRepository;
 
-    // ... Diğer metotlar aynı kalacak ...
     @Transactional
     public TransactionResponse createAndApproveTransaction(TransactionCreateRequest request) {
-        Transaction transaction = createTransactionInternal(request, true); // Bakiye güncellenecek
-        transaction.setStatus(TransactionStatus.APPROVED); // Durumu ONAYLANDI yap
+        Transaction transaction = createTransactionInternal(request, true);
+        transaction.setStatus(TransactionStatus.APPROVED);
         Transaction savedTransaction = transactionRepository.save(transaction);
         return transactionMapper.toTransactionResponse(savedTransaction);
     }
 
     @Transactional
     public TransactionResponse createPendingTransaction(TransactionCreateRequest request) {
-        Transaction transaction = createTransactionInternal(request, false); // Bakiye GÜNCELLENMEYECEK
-        transaction.setStatus(TransactionStatus.PENDING); // Durumu ONAY BEKLİYOR yap
+        Transaction transaction = createTransactionInternal(request, false);
+        transaction.setStatus(TransactionStatus.PENDING);
         Transaction savedTransaction = transactionRepository.save(transaction);
         return transactionMapper.toTransactionResponse(savedTransaction);
     }
@@ -69,7 +69,7 @@ public class TransactionService {
         transaction.setNotes(request.getNotes());
 
         if (request.getTransactionDate() != null) {
-            transaction.setTransactionDate(request.getTransactionDate().atStartOfDay());
+            transaction.setTransactionDate(request.getTransactionDate().atTime(LocalTime.now()));
         } else {
             transaction.setTransactionDate(LocalDateTime.now());
         }
@@ -82,7 +82,7 @@ public class TransactionService {
 
         BigDecimal balanceChange = BigDecimal.ZERO;
 
-        if (request.getItems() != null) {
+        if (request.getItems() != null && !request.getItems().isEmpty()) {
             for (var itemRequest : request.getItems()) {
                 Product product = productRepository.findById(itemRequest.getProductId())
                         .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + itemRequest.getProductId()));
@@ -118,7 +118,7 @@ public class TransactionService {
             }
         }
 
-        if (request.getPayments() != null) {
+        if (request.getPayments() != null && !request.getPayments().isEmpty()) {
             for (var paymentRequest : request.getPayments()) {
                 TransactionPayment payment = new TransactionPayment();
                 payment.setAmount(paymentRequest.getAmount());
@@ -139,14 +139,15 @@ public class TransactionService {
 
     @Transactional
     public TransactionResponse approveTransaction(Long transactionId) {
-        Transaction transaction = transactionRepository.findById(transactionId)
+        Transaction transaction = transactionRepository.findByIdWithDetails(transactionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
 
-        if (transaction.getStatus() != TransactionStatus.PENDING) {
-            throw new IllegalStateException("Sadece onay bekleyen işlemler onaylanabilir.");
+        if (transaction.getStatus() == TransactionStatus.APPROVED) {
+            throw new IllegalStateException("Bu işlem zaten onaylanmış.");
         }
 
         transaction.setStatus(TransactionStatus.APPROVED);
+        transaction.setRejectionReason(null);
 
         BigDecimal balanceChange = calculateBalanceChange(transaction);
         Customer customer = transaction.getCustomer();
@@ -159,11 +160,18 @@ public class TransactionService {
 
     @Transactional
     public TransactionResponse rejectTransaction(Long transactionId, String reason) {
-        Transaction transaction = transactionRepository.findById(transactionId)
+        Transaction transaction = transactionRepository.findByIdWithDetails(transactionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
 
-        if (transaction.getStatus() != TransactionStatus.PENDING) {
-            throw new IllegalStateException("Sadece onay bekleyen işlemler reddedilebilir.");
+        if (transaction.getStatus() == TransactionStatus.REJECTED) {
+            throw new IllegalStateException("Bu işlem zaten reddedilmiş/iptal edilmiş.");
+        }
+
+        if (transaction.getStatus() == TransactionStatus.APPROVED) {
+            Customer customer = transaction.getCustomer();
+            BigDecimal balanceChange = calculateBalanceChange(transaction);
+            customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().subtract(balanceChange));
+            customerRepository.save(customer);
         }
 
         transaction.setStatus(TransactionStatus.REJECTED);
@@ -193,33 +201,9 @@ public class TransactionService {
             throw new AccessDeniedException("Bu işlemi güncelleme yetkiniz yok.");
         }
 
+        updateTransactionItemsAndPayments(transaction, request.getItems(), request.getPayments());
         transaction.setNotes(request.getNotes());
-        transaction.getItems().clear();
-        transaction.getPayments().clear();
 
-        if (request.getItems() != null) {
-            request.getItems().forEach(itemRequest -> {
-                Product product = productRepository.findById(itemRequest.getProductId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + itemRequest.getProductId()));
-                TransactionItem newItem = new TransactionItem();
-                newItem.setProduct(product);
-                newItem.setQuantity(itemRequest.getQuantity());
-                newItem.setType(itemRequest.getType());
-                newItem.setUnitPrice(itemRequest.getUnitPrice());
-                newItem.setTotalPrice(itemRequest.getUnitPrice().multiply(BigDecimal.valueOf(itemRequest.getQuantity())));
-                newItem.setTransaction(transaction);
-                transaction.getItems().add(newItem);
-            });
-        }
-        if (request.getPayments() != null) {
-            request.getPayments().forEach(paymentRequest -> {
-                TransactionPayment newPayment = new TransactionPayment();
-                newPayment.setAmount(paymentRequest.getAmount());
-                newPayment.setType(paymentRequest.getType());
-                newPayment.setTransaction(transaction);
-                transaction.getPayments().add(newPayment);
-            });
-        }
 
         Transaction updatedTransaction = transactionRepository.save(transaction);
         return transactionMapper.toTransactionResponse(updatedTransaction);
@@ -252,7 +236,7 @@ public class TransactionService {
 
     @Transactional
     public void deleteTransaction(Long transactionId) {
-        Transaction transaction = transactionRepository.findById(transactionId)
+        Transaction transaction = transactionRepository.findByIdWithDetails(transactionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
 
         if (transaction.getStatus() == TransactionStatus.APPROVED) {
@@ -281,19 +265,21 @@ public class TransactionService {
     }
 
     public TransactionResponse getTransactionById(Long transactionId) {
-        Transaction transaction = transactionRepository.findById(transactionId)
+        Transaction transaction = transactionRepository.findByIdWithDetails(transactionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
         return transactionMapper.toTransactionResponse(transaction);
     }
 
     @Transactional
     public TransactionResponse updateTransactionItemPrice(Long transactionId, Long itemId, TransactionItemPriceUpdateRequest request) {
-        TransactionItem item = transactionItemRepository.findById(itemId)
+        Transaction transaction = transactionRepository.findByIdWithDetails(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found with id: " + transactionId));
+        TransactionItem item = transaction.getItems().stream()
+                .filter(i -> i.getId().equals(itemId))
+                .findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction item not found with id: " + itemId));
-        if (!item.getTransaction().getId().equals(transactionId)) {
-            throw new IllegalStateException("Item with id " + itemId + " does not belong to transaction with id " + transactionId);
-        }
-        if (item.getTransaction().getStatus() == TransactionStatus.APPROVED) {
+
+        if (transaction.getStatus() == TransactionStatus.APPROVED) {
             BigDecimal oldItemBalanceChange = (item.getType() == ItemType.SATIS) ? item.getTotalPrice() : item.getTotalPrice().negate();
             item.setUnitPrice(request.getNewUnitPrice());
             item.setTotalPrice(request.getNewUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
@@ -306,9 +292,8 @@ public class TransactionService {
             item.setUnitPrice(request.getNewUnitPrice());
             item.setTotalPrice(request.getNewUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
         }
-        transactionItemRepository.save(item);
-        Transaction updatedTransaction = transactionRepository.findByIdWithDetails(transactionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found after update with id: " + transactionId));
+
+        Transaction updatedTransaction = transactionRepository.save(transaction);
         return transactionMapper.toTransactionResponse(updatedTransaction);
     }
 
@@ -323,12 +308,23 @@ public class TransactionService {
             customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().subtract(oldBalanceChange));
         }
 
+        updateTransactionItemsAndPayments(transaction, request.getItems(), request.getPayments());
         transaction.setNotes(request.getNotes());
-        transaction.getItems().clear();
-        transaction.getPayments().clear();
 
-        if (request.getItems() != null) {
-            request.getItems().forEach(itemRequest -> {
+        if (transaction.getStatus() == TransactionStatus.APPROVED) {
+            BigDecimal newBalanceChange = calculateBalanceChange(transaction);
+            customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().add(newBalanceChange));
+            customerRepository.save(customer);
+        }
+
+        Transaction updatedTransaction = transactionRepository.save(transaction);
+        return transactionMapper.toTransactionResponse(updatedTransaction);
+    }
+
+    private void updateTransactionItemsAndPayments(Transaction transaction, List<TransactionItemUpdateRequest> itemRequests, List<TransactionPaymentUpdateRequest> paymentRequests) {
+        transaction.getItems().clear();
+        if (itemRequests != null) {
+            itemRequests.forEach(itemRequest -> {
                 Product product = productRepository.findById(itemRequest.getProductId())
                         .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + itemRequest.getProductId()));
                 TransactionItem newItem = new TransactionItem();
@@ -341,8 +337,10 @@ public class TransactionService {
                 transaction.getItems().add(newItem);
             });
         }
-        if (request.getPayments() != null) {
-            request.getPayments().forEach(paymentRequest -> {
+
+        transaction.getPayments().clear();
+        if (paymentRequests != null) {
+            paymentRequests.forEach(paymentRequest -> {
                 TransactionPayment newPayment = new TransactionPayment();
                 newPayment.setAmount(paymentRequest.getAmount());
                 newPayment.setType(paymentRequest.getType());
@@ -350,18 +348,8 @@ public class TransactionService {
                 transaction.getPayments().add(newPayment);
             });
         }
-
-        if (transaction.getStatus() == TransactionStatus.APPROVED) {
-            BigDecimal newBalanceChange = calculateBalanceChange(transaction);
-            customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().add(newBalanceChange));
-            customerRepository.save(customer);
-        }
-
-        Transaction updatedTransaction = transactionRepository.save(transaction);
-        return transactionMapper.toTransactionResponse(updatedTransaction);
     }
 
-    // METOT İMZASI VE İÇERİĞİ TAMAMEN GÜNCELLENDİ
     @Transactional(readOnly = true)
     public PagedResponseDto<TransactionResponse> searchTransactions(LocalDate startDate, LocalDate endDate, Long customerId, Long routeId, TransactionStatus status, Pageable pageable) {
         Specification<Transaction> spec = Specification.where(null);
@@ -387,13 +375,8 @@ public class TransactionService {
                     criteriaBuilder.equal(root.get("status"), status));
         }
 
-        // Veritabanından sadece istenen sayfayı çekiyoruz.
         Page<Transaction> transactionPage = transactionRepository.findAll(spec, pageable);
-
-        // Gelen sayfayı DTO'ya çeviriyoruz.
         Page<TransactionResponse> dtoPage = transactionPage.map(transactionMapper::toTransactionResponse);
-
-        // Kendi PagedResponseDto'muza dönüştürüp geri döndürüyoruz.
         return new PagedResponseDto<>(dtoPage);
     }
 
@@ -410,7 +393,6 @@ public class TransactionService {
                 .collect(Collectors.toList());
     }
 
-    // METOT GÜNCELLENDİ
     @Transactional(readOnly = true)
     public DriverDailyCustomerSummaryDto getDriverDailySummaryForCustomer(Long customerId, Long driverId) {
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
