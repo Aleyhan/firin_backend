@@ -20,17 +20,11 @@ import org.slf4j.LoggerFactory;
 import com.firinyonetim.backend.dto.route.RouteProductSummaryDto;
 import com.firinyonetim.backend.entity.TransactionItem;
 
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -67,11 +61,37 @@ public class RouteService {
         return routeMapper.toRouteResponse(routeRepository.save(route));
     }
 
+    @Transactional(readOnly = true)
     public List<RouteResponse> getAllRoutes() {
-        return routeRepository.findAll().stream()
-                .map(routeMapper::toRouteResponse)
-                .collect(Collectors.toList());
+        List<Route> routes = routeRepository.findAll();
+        List<Long> routeIds = routes.stream().map(Route::getId).collect(Collectors.toList());
+
+        // Rotalara ait tüm atamaları tek sorguda çek
+        List<RouteAssignment> assignments = routeAssignmentRepository.findAll();
+
+        // Rota ID'sine göre müşteri listelerini grupla
+        Map<Long, List<Customer>> customersByRouteId = assignments.stream()
+                .collect(Collectors.groupingBy(
+                        ra -> ra.getRoute().getId(),
+                        Collectors.mapping(RouteAssignment::getCustomer, Collectors.toList())
+                ));
+
+        // Rotaları DTO'ya dönüştürürken hesaplamaları yap
+        return routes.stream().map(route -> {
+            RouteResponse response = routeMapper.toRouteResponse(route);
+            List<Customer> customersInRoute = customersByRouteId.getOrDefault(route.getId(), Collections.emptyList());
+
+            long customerCount = customersInRoute.size();
+            BigDecimal totalDebt = customersInRoute.stream()
+                    .map(Customer::getCurrentBalanceAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            response.setCustomerCount(customerCount);
+            response.setTotalDebt(totalDebt);
+            return response;
+        }).collect(Collectors.toList());
     }
+
 
     @Transactional
     public void deleteRouteByStatus(Long routeId) {
@@ -358,7 +378,7 @@ public class RouteService {
     public void updateDeliveryOrder(Long routeId, List<Long> orderedCustomerIds) {
         List<RouteAssignment> assignments = routeAssignmentRepository.findByRouteIdOrderByDeliveryOrderAsc(routeId);
         Map<Long, RouteAssignment> assignmentMap = assignments.stream()
-                .collect(Collectors.toMap(ra -> ra.getCustomer().getId(), ra -> ra));
+                .collect(Collectors.toMap(ra -> ra.getCustomer().getId(), Function.identity()));
 
         for (int i = 0; i < orderedCustomerIds.size(); i++) {
             Long customerId = orderedCustomerIds.get(i);
@@ -370,7 +390,6 @@ public class RouteService {
         routeAssignmentRepository.saveAll(assignments);
     }
 
-    // YENİ METOT
     @Transactional(readOnly = true)
     public List<RouteResponse> getDriverRoutes(Long driverId) {
         return routeRepository.findByDriverIdAndIsActiveTrue(driverId)
