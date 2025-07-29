@@ -9,6 +9,7 @@ import com.firinyonetim.backend.dto.customer.response.CustomerProductAssignmentR
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
 import com.firinyonetim.backend.dto.customer.response.LastPaymentDateResponse;
 import com.firinyonetim.backend.dto.tax_info.request.TaxInfoRequest;
+import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
 import com.firinyonetim.backend.entity.*;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.mapper.*;
@@ -48,6 +49,8 @@ public class CustomerService {
     private final CustomerProductAssignmentRepository customerProductAssignmentRepository;
     private final CustomerProductAssignmentMapper customerProductAssignmentMapper;
     private final TaxInfoMapper taxInfoMapper;
+    private final TransactionRepository transactionRepository;
+    private final TransactionMapper transactionMapper;
 
 
     @Transactional(readOnly = true)
@@ -116,6 +119,8 @@ public class CustomerService {
                 .collect(Collectors.toList());
     }
 
+    // CustomerService.java içinde bu metodu bulun ve değiştirin
+
     public CustomerResponse getCustomerById(Long customerId) {
         Customer customer = customerRepository.findById(customerId)
                 .orElseThrow(() -> new EntityNotFoundException("Customer not found with id: " + customerId));
@@ -126,6 +131,13 @@ public class CustomerService {
                 .map(ra -> ra.getRoute().getId())
                 .collect(Collectors.toList());
         response.setRouteIds(routeIds);
+
+        // YENİ EKLENEN KISIM: İşlem geçmişini (ledger) çekip DTO'ya ekliyoruz.
+        List<Transaction> transactions = transactionRepository.findByCustomerIdOrderByTransactionDateAsc(customerId);
+        List<TransactionResponse> ledger = transactions.stream()
+                .map(transactionMapper::toTransactionResponse)
+                .collect(Collectors.toList());
+        response.setLedger(ledger);
 
         return response;
     }
