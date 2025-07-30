@@ -1,3 +1,4 @@
+// src/main/java/com/firinyonetim/backend/service/TransactionService.java
 package com.firinyonetim.backend.service;
 
 import com.firinyonetim.backend.dto.PagedResponseDto;
@@ -41,6 +42,7 @@ public class TransactionService {
     private final RouteRepository routeRepository;
     private final TransactionItemRepository transactionItemRepository;
     private final CustomerProductAssignmentRepository customerProductAssignmentRepository;
+    private final RouteAssignmentRepository routeAssignmentRepository;
 
     @Transactional
     public TransactionResponse createAndApproveTransaction(TransactionCreateRequest request) {
@@ -83,13 +85,20 @@ public class TransactionService {
         BigDecimal balanceChange = BigDecimal.ZERO;
 
         if (request.getItems() != null && !request.getItems().isEmpty()) {
+            // YENİ KONTROL: Müşterinin tüm ürün atamalarını tek seferde çek
+            Map<Long, CustomerProductAssignment> assignmentsMap = customerProductAssignmentRepository
+                    .findByCustomerId(customer.getId()).stream()
+                    .collect(Collectors.toMap(cpa -> cpa.getProduct().getId(), cpa -> cpa));
+
             for (var itemRequest : request.getItems()) {
                 Product product = productRepository.findById(itemRequest.getProductId())
                         .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + itemRequest.getProductId()));
 
-                CustomerProductAssignment assignment = customerProductAssignmentRepository
-                        .findByCustomerIdAndProductId(customer.getId(), product.getId())
-                        .orElseThrow(() -> new IllegalStateException("Ürün '" + product.getName() + "' bu müşteriye atanmamış."));
+                // YENİ KONTROL: Ürünün müşteriye atanıp atanmadığını kontrol et
+                CustomerProductAssignment assignment = assignmentsMap.get(product.getId());
+                if (assignment == null) {
+                    throw new IllegalStateException("Ürün '" + product.getName() + "' bu müşteriye atanmamış. İşlem yapılamaz.");
+                }
 
                 BigDecimal basePrice = (assignment.getSpecialPrice() != null) ? assignment.getSpecialPrice() : product.getBasePrice();
                 BigDecimal finalUnitPrice;
@@ -395,6 +404,10 @@ public class TransactionService {
 
     @Transactional(readOnly = true)
     public DriverDailyCustomerSummaryDto getDriverDailySummaryForCustomer(Long customerId, Long driverId) {
+        if (!routeAssignmentRepository.isCustomerAssignedToDriverActiveRoutes(customerId, driverId)) {
+            throw new AccessDeniedException("Bu müşterinin bilgilerini görüntüleme yetkiniz yok.");
+        }
+
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
         LocalDateTime endOfDay = LocalDate.now().atTime(LocalTime.MAX);
 
