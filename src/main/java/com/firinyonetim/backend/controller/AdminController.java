@@ -1,16 +1,21 @@
 // src/main/java/com/firinyonetim/backend/controller/AdminController.java
 package com.firinyonetim.backend.controller;
 
-import com.firinyonetim.backend.dto.shipment.response.ShipmentReportResponse; // YENİ
+import com.firinyonetim.backend.dto.PagedResponseDto;
+import com.firinyonetim.backend.dto.shipment.response.ShipmentReportResponse;
 import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
+import com.firinyonetim.backend.entity.ShipmentStatus; // YENİ
 import com.firinyonetim.backend.service.RouteService;
-import com.firinyonetim.backend.service.ShipmentService; // YENİ
+import com.firinyonetim.backend.service.ShipmentService;
 import com.firinyonetim.backend.service.TransactionService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -22,8 +27,9 @@ public class AdminController {
 
     private final TransactionService transactionService;
     private final RouteService routeService;
-    private final ShipmentService shipmentService; // YENİ
+    private final ShipmentService shipmentService;
 
+    // ... (diğer metotlar aynı)
     @GetMapping("/pending-transactions")
     public ResponseEntity<List<TransactionResponse>> getPendingTransactions() {
         return ResponseEntity.ok(transactionService.getPendingTransactions());
@@ -49,10 +55,16 @@ public class AdminController {
         return ResponseEntity.ok().build();
     }
 
-    // YENİ ENDPOINT'LER
-    @GetMapping("/shipments/completed")
-    public ResponseEntity<List<ShipmentReportResponse>> getCompletedShipments() {
-        return ResponseEntity.ok(shipmentService.getCompletedShipments());
+    // ENDPOINT İMZASI GÜNCELLENDİ
+    @GetMapping("/shipments")
+    public ResponseEntity<PagedResponseDto<ShipmentReportResponse>> searchShipments(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) Long routeId,
+            @RequestParam(required = false) Long driverId,
+            @RequestParam(required = false) ShipmentStatus status, // YENİ
+            Pageable pageable) {
+        return ResponseEntity.ok(shipmentService.searchShipments(startDate, endDate, routeId, driverId, status, pageable));
     }
 
     @GetMapping("/shipments/{id}")

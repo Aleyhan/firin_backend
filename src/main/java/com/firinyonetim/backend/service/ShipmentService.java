@@ -1,18 +1,23 @@
 // src/main/java/com/firinyonetim/backend/service/ShipmentService.java
 package com.firinyonetim.backend.service;
 
+import com.firinyonetim.backend.dto.PagedResponseDto;
 import com.firinyonetim.backend.dto.shipment.request.ShipmentCreateRequest;
 import com.firinyonetim.backend.dto.shipment.request.ShipmentEndRequest;
 import com.firinyonetim.backend.dto.shipment.request.ShipmentItemEndRequest;
 import com.firinyonetim.backend.dto.shipment.request.ShipmentItemRequest;
-import com.firinyonetim.backend.dto.shipment.response.ShipmentReportResponse; // YENİ
+import com.firinyonetim.backend.dto.shipment.response.ShipmentReportResponse;
 import com.firinyonetim.backend.dto.shipment.response.ShipmentResponse;
 import com.firinyonetim.backend.entity.*;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.mapper.ShipmentMapper;
-import com.firinyonetim.backend.mapper.ShipmentReportMapper; // YENİ
+import com.firinyonetim.backend.mapper.ShipmentReportMapper;
 import com.firinyonetim.backend.repository.*;
+import jakarta.persistence.criteria.JoinType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -34,9 +39,9 @@ public class ShipmentService {
     private final ProductRepository productRepository;
     private final TransactionRepository transactionRepository;
     private final ShipmentMapper shipmentMapper;
-    private final ShipmentReportMapper shipmentReportMapper; // YENİ
+    private final ShipmentReportMapper shipmentReportMapper;
 
-    // ... createShipment ve getTodaysShipmentForRoute metotları aynı ...
+    // ... createShipment, getTodaysShipmentForRoute, endShipment metotları aynı ...
     @Transactional
     public void createShipment(ShipmentCreateRequest request) {
         User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -148,13 +153,39 @@ public class ShipmentService {
         shipmentRepository.save(shipment);
     }
 
-    // YENİ METOTLAR
+    // METOT İMZASI GÜNCELLENDİ
     @Transactional(readOnly = true)
-    public List<ShipmentReportResponse> getCompletedShipments() {
-        List<Shipment> shipments = shipmentRepository.findByStatusWithDetails(ShipmentStatus.COMPLETED);
-        return shipments.stream()
-                .map(shipmentReportMapper::toResponse)
-                .collect(Collectors.toList());
+    public PagedResponseDto<ShipmentReportResponse> searchShipments(LocalDate startDate, LocalDate endDate, Long routeId, Long driverId, ShipmentStatus status, Pageable pageable) {
+        Specification<Shipment> spec = (root, query, cb) -> {
+            root.fetch("route", JoinType.LEFT);
+            root.fetch("driver", JoinType.LEFT);
+            query.distinct(true);
+
+            Specification<Shipment> finalSpec = Specification.where(null);
+
+            // DURUM FİLTRESİ EKLENDİ
+            if (status != null) {
+                finalSpec = finalSpec.and((r, q, c) -> c.equal(r.get("status"), status));
+            }
+
+            if (startDate != null) {
+                finalSpec = finalSpec.and((r, q, c) -> c.greaterThanOrEqualTo(r.get("shipmentDate"), startDate));
+            }
+            if (endDate != null) {
+                finalSpec = finalSpec.and((r, q, c) -> c.lessThanOrEqualTo(r.get("shipmentDate"), endDate));
+            }
+            if (routeId != null) {
+                finalSpec = finalSpec.and((r, q, c) -> c.equal(r.get("route").get("id"), routeId));
+            }
+            if (driverId != null) {
+                finalSpec = finalSpec.and((r, q, c) -> c.equal(r.get("driver").get("id"), driverId));
+            }
+            return finalSpec.toPredicate(root, query, cb);
+        };
+
+        Page<Shipment> shipmentPage = shipmentRepository.findAll(spec, pageable);
+        Page<ShipmentReportResponse> dtoPage = shipmentPage.map(shipmentReportMapper::toResponse);
+        return new PagedResponseDto<>(dtoPage);
     }
 
     @Transactional(readOnly = true)

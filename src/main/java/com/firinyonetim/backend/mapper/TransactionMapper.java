@@ -18,6 +18,9 @@ public interface TransactionMapper {
     @Mapping(source = "route.name", target = "routeName")
     @Mapping(source = "status", target = "status")
     @Mapping(source = "rejectionReason", target = "rejectionReason")
-    @Mapping(target = "dailySequenceNumber", ignore = true) // YENİ MAPPING
+    @Mapping(target = "dailySequenceNumber", ignore = true)
+    // YENİ MAPPING'LER
+    @Mapping(source = "shipment.id", target = "shipmentId")
+    @Mapping(source = "shipment.sequenceNumber", target = "shipmentSequenceNumber")
     TransactionResponse toTransactionResponse(Transaction transaction);
 }

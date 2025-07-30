@@ -23,7 +23,9 @@ public class TransactionResponse {
 
     private TransactionStatus status;
     private String rejectionReason;
-
-    // YENİ ALAN
     private Integer dailySequenceNumber;
+
+    // YENİ ALANLAR
+    private Long shipmentId;
+    private Integer shipmentSequenceNumber;
 }
