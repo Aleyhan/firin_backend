@@ -1,3 +1,4 @@
+// src/main/java/com/firinyonetim/backend/dto/customer/response/CustomerResponse.java
 package com.firinyonetim.backend.dto.customer.response;
 
 import com.firinyonetim.backend.dto.address.response.AddressResponse;
@@ -7,6 +8,7 @@ import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
 import com.firinyonetim.backend.entity.DayOfWeek;
 import lombok.Data;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
@@ -26,7 +28,8 @@ public class CustomerResponse {
     private Set<DayOfWeek> workingDays;
     private Set<DayOfWeek> irsaliyeGunleri;
     private List<Long> routeIds;
+    private List<TransactionResponse> ledger;
 
     // YENİ ALAN
-    private List<TransactionResponse> ledger;
+    private LocalDateTime lastPaymentDate;
 }

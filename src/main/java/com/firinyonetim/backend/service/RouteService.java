@@ -1,6 +1,8 @@
+// src/main/java/com/firinyonetim/backend/service/RouteService.java
 package com.firinyonetim.backend.service;
 
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
+import com.firinyonetim.backend.dto.route.RouteSummaryDto;
 import com.firinyonetim.backend.dto.route.request.RouteCreateRequest;
 import com.firinyonetim.backend.dto.route.response.RouteResponse;
 import com.firinyonetim.backend.entity.*;
@@ -63,33 +65,10 @@ public class RouteService {
 
     @Transactional(readOnly = true)
     public List<RouteResponse> getAllRoutes() {
-        List<Route> routes = routeRepository.findAll();
-        List<Long> routeIds = routes.stream().map(Route::getId).collect(Collectors.toList());
-
-        // Rotalara ait tüm atamaları tek sorguda çek
-        List<RouteAssignment> assignments = routeAssignmentRepository.findAll();
-
-        // Rota ID'sine göre müşteri listelerini grupla
-        Map<Long, List<Customer>> customersByRouteId = assignments.stream()
-                .collect(Collectors.groupingBy(
-                        ra -> ra.getRoute().getId(),
-                        Collectors.mapping(RouteAssignment::getCustomer, Collectors.toList())
-                ));
-
-        // Rotaları DTO'ya dönüştürürken hesaplamaları yap
-        return routes.stream().map(route -> {
-            RouteResponse response = routeMapper.toRouteResponse(route);
-            List<Customer> customersInRoute = customersByRouteId.getOrDefault(route.getId(), Collections.emptyList());
-
-            long customerCount = customersInRoute.size();
-            BigDecimal totalDebt = customersInRoute.stream()
-                    .map(Customer::getCurrentBalanceAmount)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-            response.setCustomerCount(customerCount);
-            response.setTotalDebt(totalDebt);
-            return response;
-        }).collect(Collectors.toList());
+        List<RouteSummaryDto> summaries = routeRepository.findAllWithSummary();
+        return summaries.stream()
+                .map(routeMapper::toRouteResponseFromSummary)
+                .collect(Collectors.toList());
     }
 
 

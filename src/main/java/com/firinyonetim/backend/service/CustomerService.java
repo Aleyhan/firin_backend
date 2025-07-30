@@ -1,3 +1,4 @@
+// src/main/java/com/firinyonetim/backend/service/CustomerService.java
 package com.firinyonetim.backend.service;
 
 import com.firinyonetim.backend.dto.PagedResponseDto;
@@ -82,6 +83,13 @@ public class CustomerService {
         };
 
         Page<Customer> customerPage = customerRepository.findAll(spec, pageable);
+        List<Customer> customersOnPage = customerPage.getContent();
+
+        if (customersOnPage.isEmpty()) {
+            return new PagedResponseDto<>(customerPage.map(customerMapper::toCustomerResponse));
+        }
+
+        List<Long> customerIds = customersOnPage.stream().map(Customer::getId).collect(Collectors.toList());
 
         List<RouteAssignment> allAssignments = routeAssignmentRepository.findAllWithDetails();
         Map<Long, List<Long>> customerToRouteIdsMap = allAssignments.stream()
@@ -90,9 +98,17 @@ public class CustomerService {
                         mapping(assignment -> assignment.getRoute().getId(), toList())
                 ));
 
+        Map<Long, LocalDateTime> lastPaymentDateMap = transactionPaymentRepository.findLastPaymentDatesForCustomerIds(customerIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        map -> (Long) map.get("customerId"),
+                        map -> (LocalDateTime) map.get("lastPaymentDate")
+                ));
+
         Page<CustomerResponse> dtoPage = customerPage.map(customer -> {
             CustomerResponse response = customerMapper.toCustomerResponse(customer);
             response.setRouteIds(customerToRouteIdsMap.getOrDefault(customer.getId(), Collections.emptyList()));
+            response.setLastPaymentDate(lastPaymentDateMap.get(customer.getId()));
             return response;
         });
 
