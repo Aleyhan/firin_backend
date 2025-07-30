@@ -53,9 +53,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**", "/api/health").permitAll()
                         .requestMatchers("/api/driver/**").hasRole("SOFOR")
                         .requestMatchers("/api/admin/**").hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE")
-                        .requestMatchers(HttpMethod.GET, "/api/routes/{id}").hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE")
+                        // YENİ İZİNLER
+                        .requestMatchers(HttpMethod.GET, "/api/products").hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE", "SOFOR")
+                        .requestMatchers(HttpMethod.GET, "/api/routes/{id}").hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE", "SOFOR")
                         .requestMatchers(HttpMethod.GET, "/api/customers/{id}/products").hasAnyRole("YONETICI", "DEVELOPER", "SOFOR", "MUHASEBE")
-                        // DEĞİŞİKLİK BURADA: MUHASEBE rolü eklendi
                         .anyRequest().hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE")
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

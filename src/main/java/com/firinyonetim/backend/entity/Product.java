@@ -1,3 +1,4 @@
+// src/main/java/com/firinyonetim/backend/entity/Product.java
 package com.firinyonetim.backend.entity;
 
 import jakarta.persistence.*;
@@ -21,15 +22,17 @@ public class Product {
     @Column(nullable = false)
     private Integer vatRate;
 
-    // DEĞİŞİKLİK: String yerine ProductGroup entity'sine referans
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_group_id")
     private ProductGroup productGroup;
 
-    // DEĞİŞİKLİK: String yerine Unit entity'sine referans
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "unit_id")
     private Unit unit;
 
     private Integer grammage;
+
+    // YENİ ALAN
+    @Column(name = "units_per_crate")
+    private Integer unitsPerCrate;
 }

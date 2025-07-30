@@ -25,6 +25,7 @@ public class ProductController {
         return new ResponseEntity<>(productService.createProduct(request), HttpStatus.CREATED);
     }
 
+    @PreAuthorize("hasRole('YONETICI')" + " or hasRole('MUHASEBE') "+" OR hasRole('SOFOR')") // YENİ: SOFOR rolü de erişim izni verildi
     @GetMapping
     public ResponseEntity<List<ProductResponse>> getAllProducts() {
         return ResponseEntity.ok(productService.getAllProducts());

@@ -40,7 +40,7 @@ public class TransactionService {
     private final ProductRepository productRepository;
     private final TransactionMapper transactionMapper;
     private final RouteRepository routeRepository;
-    private final TransactionItemRepository transactionItemRepository;
+    private final ShipmentRepository shipmentRepository; // YENİ REPOSITORY
     private final CustomerProductAssignmentRepository customerProductAssignmentRepository;
     private final RouteAssignmentRepository routeAssignmentRepository;
 
@@ -65,10 +65,21 @@ public class TransactionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + request.getCustomerId()));
         User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
 
+        // YENİ KISIM: Gelen shipmentId ile sevkiyatı bul
+        Shipment shipment = shipmentRepository.findById(request.getShipmentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Shipment not found with id: " + request.getShipmentId()));
+
+        // Güvenlik kontrolü: İşlemi yapan şoför, sevkiyatı başlatan şoförle aynı mı?
+        if (!shipment.getDriver().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("Bu sevkiyata işlem ekleme yetkiniz yok.");
+        }
+
         Transaction transaction = new Transaction();
         transaction.setCustomer(customer);
         transaction.setCreatedBy(currentUser);
         transaction.setNotes(request.getNotes());
+        transaction.setShipment(shipment); // Sevkiyatı işleme bağla
+        transaction.setRoute(shipment.getRoute()); // Rotayı sevkiyattan al
 
         if (request.getTransactionDate() != null) {
             transaction.setTransactionDate(request.getTransactionDate().atTime(LocalTime.now()));
@@ -76,16 +87,9 @@ public class TransactionService {
             transaction.setTransactionDate(LocalDateTime.now());
         }
 
-        if (request.getRouteId() != null) {
-            Route route = routeRepository.findById(request.getRouteId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + request.getRouteId()));
-            transaction.setRoute(route);
-        }
-
         BigDecimal balanceChange = BigDecimal.ZERO;
 
         if (request.getItems() != null && !request.getItems().isEmpty()) {
-            // YENİ KONTROL: Müşterinin tüm ürün atamalarını tek seferde çek
             Map<Long, CustomerProductAssignment> assignmentsMap = customerProductAssignmentRepository
                     .findByCustomerId(customer.getId()).stream()
                     .collect(Collectors.toMap(cpa -> cpa.getProduct().getId(), cpa -> cpa));
@@ -94,7 +98,6 @@ public class TransactionService {
                 Product product = productRepository.findById(itemRequest.getProductId())
                         .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + itemRequest.getProductId()));
 
-                // YENİ KONTROL: Ürünün müşteriye atanıp atanmadığını kontrol et
                 CustomerProductAssignment assignment = assignmentsMap.get(product.getId());
                 if (assignment == null) {
                     throw new IllegalStateException("Ürün '" + product.getName() + "' bu müşteriye atanmamış. İşlem yapılamaz.");
@@ -146,6 +149,7 @@ public class TransactionService {
         return transaction;
     }
 
+    // ... (servisin geri kalanı aynı)
     @Transactional
     public TransactionResponse approveTransaction(Long transactionId) {
         Transaction transaction = transactionRepository.findByIdWithDetails(transactionId)

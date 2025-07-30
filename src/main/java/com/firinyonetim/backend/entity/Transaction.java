@@ -1,3 +1,4 @@
+// src/main/java/com/firinyonetim/backend/entity/Transaction.java
 package com.firinyonetim.backend.entity;
 
 import jakarta.persistence.*;
@@ -27,6 +28,11 @@ public class Transaction {
     @JoinColumn(name = "route_id", nullable = true)
     private Route route;
 
+    // DEĞİŞİKLİK BURADA
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "shipment_id", nullable = true) // false -> true olarak değiştirildi
+    private Shipment shipment;
+
     @Column(nullable = false)
     private LocalDateTime transactionDate = LocalDateTime.now();
 
@@ -36,14 +42,12 @@ public class Transaction {
     @JoinColumn(name = "created_by_user_id", nullable = false)
     private User createdBy;
 
-    // YENİ ALANLAR
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private TransactionStatus status = TransactionStatus.PENDING; // Varsayılan olarak PENDING
+    private TransactionStatus status = TransactionStatus.PENDING;
 
     @Column(columnDefinition = "TEXT")
     private String rejectionReason;
-    // YENİ ALANLAR SONU
 
     @ToString.Exclude
     @EqualsAndHashCode.Exclude

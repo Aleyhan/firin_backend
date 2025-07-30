@@ -1,3 +1,4 @@
+// src/main/java/com/firinyonetim/backend/dto/product/request/ProductCreateRequest.java
 package com.firinyonetim.backend.dto.product.request;
 
 import jakarta.validation.constraints.NotBlank;
@@ -21,13 +22,15 @@ public class ProductCreateRequest {
     @PositiveOrZero(message = "KDV oranı 0 veya daha büyük olmalıdır.")
     private Integer vatRate;
 
-    // DEĞİŞİKLİK: String yerine ID
     private Long productGroupId;
 
-    // DEĞİŞİKLİK: String yerine ID
     @NotNull(message = "Birim seçilmelidir.")
     private Long unitId;
 
     @Positive(message = "Gramaj pozitif bir değer olmalıdır.")
     private Integer grammage;
+
+    // YENİ ALAN
+    @Positive(message = "Kasa adedi pozitif bir değer olmalıdır.")
+    private Integer unitsPerCrate;
 }

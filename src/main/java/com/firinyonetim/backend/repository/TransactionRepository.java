@@ -15,6 +15,7 @@ import java.util.Optional;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long>, JpaSpecificationExecutor<Transaction> {
 
+    // ... (diğer metotlar aynı kalacak)
     @Query("SELECT DISTINCT t FROM Transaction t " +
             "LEFT JOIN FETCH t.items " +
             "LEFT JOIN FETCH t.payments " +
@@ -22,7 +23,6 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             "ORDER BY t.transactionDate DESC")
     List<Transaction> findByCustomerIdOrderByTransactionDateDesc(Long customerId);
 
-    // YENİ METOT: Sıralama için artan sırada getirecek.
     @Query("SELECT DISTINCT t FROM Transaction t " +
             "LEFT JOIN FETCH t.items item " +
             "LEFT JOIN FETCH item.product " +
@@ -66,7 +66,6 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
 
     List<Transaction> findByStatusOrderByTransactionDateAsc(TransactionStatus status);
 
-    // YENİ METOT: Şoförün günlük özetini almak için.
     @Query("SELECT t FROM Transaction t " +
             "JOIN FETCH t.items i " +
             "JOIN FETCH i.product " +
@@ -79,4 +78,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             @Param("startOfDay") LocalDateTime startOfDay,
             @Param("endOfDay") LocalDateTime endOfDay
     );
+
+    // YENİ METOT
+    @Query("SELECT t FROM Transaction t JOIN FETCH t.items i JOIN FETCH i.product WHERE t.shipment.id = :shipmentId")
+    List<Transaction> findByShipmentId(Long shipmentId);
 }
