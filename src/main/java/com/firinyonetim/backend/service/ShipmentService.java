@@ -5,10 +5,12 @@ import com.firinyonetim.backend.dto.shipment.request.ShipmentCreateRequest;
 import com.firinyonetim.backend.dto.shipment.request.ShipmentEndRequest;
 import com.firinyonetim.backend.dto.shipment.request.ShipmentItemEndRequest;
 import com.firinyonetim.backend.dto.shipment.request.ShipmentItemRequest;
+import com.firinyonetim.backend.dto.shipment.response.ShipmentReportResponse; // YENİ
 import com.firinyonetim.backend.dto.shipment.response.ShipmentResponse;
 import com.firinyonetim.backend.entity.*;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.mapper.ShipmentMapper;
+import com.firinyonetim.backend.mapper.ShipmentReportMapper; // YENİ
 import com.firinyonetim.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -30,9 +32,11 @@ public class ShipmentService {
     private final ShipmentRepository shipmentRepository;
     private final RouteRepository routeRepository;
     private final ProductRepository productRepository;
-    private final TransactionRepository transactionRepository; // YENİ
+    private final TransactionRepository transactionRepository;
     private final ShipmentMapper shipmentMapper;
+    private final ShipmentReportMapper shipmentReportMapper; // YENİ
 
+    // ... createShipment ve getTodaysShipmentForRoute metotları aynı ...
     @Transactional
     public void createShipment(ShipmentCreateRequest request) {
         User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -77,14 +81,12 @@ public class ShipmentService {
     @Transactional(readOnly = true)
     public ShipmentResponse getTodaysShipmentForRoute(Long routeId) {
         Optional<Shipment> shipmentOpt = shipmentRepository.findTopByRouteIdAndShipmentDateOrderBySequenceNumberDesc(routeId, LocalDate.now());
-        // Sadece devam eden seferleri döndür
         return shipmentOpt
                 .filter(s -> s.getStatus() == ShipmentStatus.IN_PROGRESS)
                 .map(shipmentMapper::toResponse)
                 .orElse(null);
     }
 
-    // YENİ METOT
     @Transactional
     public void endShipment(Long shipmentId, ShipmentEndRequest request) {
         User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -100,14 +102,11 @@ public class ShipmentService {
             throw new IllegalStateException("Bu sevkiyat zaten tamamlanmış.");
         }
 
-        // 1. Gün sonu notlarını ve durumu güncelle
         shipment.setEndNotes(request.getEndNotes());
         shipment.setStatus(ShipmentStatus.COMPLETED);
 
-        // 2. O sevkiyata ait tüm işlemleri çek
         List<Transaction> transactions = transactionRepository.findByShipmentId(shipmentId);
 
-        // 3. Ürün bazında satış ve iade adetlerini hesapla
         Map<Long, Integer> salesMap = transactions.stream()
                 .flatMap(t -> t.getItems().stream())
                 .filter(item -> item.getType() == ItemType.SATIS)
@@ -118,7 +117,6 @@ public class ShipmentService {
                 .filter(item -> item.getType() == ItemType.IADE)
                 .collect(Collectors.groupingBy(item -> item.getProduct().getId(), Collectors.summingInt(TransactionItem::getQuantity)));
 
-        // 4. Şoförün girdiği gün sonu stoklarını ve hesaplamaları kaydet
         Map<Long, ShipmentItem> shipmentItemMap = shipment.getItems().stream()
                 .collect(Collectors.toMap(item -> item.getProduct().getId(), Function.identity()));
 
@@ -130,13 +128,11 @@ public class ShipmentService {
                     throw new IllegalStateException("Ürün '" + product.getName() + "' için kasa adedi tanımlanmamış.");
                 }
 
-                // Araçta kalanları kaydet
                 item.setCratesReturned(itemEndRequest.getCratesReturned());
                 item.setUnitsReturned(itemEndRequest.getUnitsReturned());
                 int totalReturned = (itemEndRequest.getCratesReturned() * product.getUnitsPerCrate()) + itemEndRequest.getUnitsReturned();
                 item.setTotalUnitsReturned(totalReturned);
 
-                // Rapor için hesaplamaları yap ve kaydet
                 int totalSold = salesMap.getOrDefault(product.getId(), 0);
                 int totalReturnedByCustomer = returnsMap.getOrDefault(product.getId(), 0);
                 int expectedInVehicle = item.getTotalUnitsTaken() - totalSold + totalReturnedByCustomer;
@@ -150,5 +146,21 @@ public class ShipmentService {
         }
 
         shipmentRepository.save(shipment);
+    }
+
+    // YENİ METOTLAR
+    @Transactional(readOnly = true)
+    public List<ShipmentReportResponse> getCompletedShipments() {
+        List<Shipment> shipments = shipmentRepository.findByStatusWithDetails(ShipmentStatus.COMPLETED);
+        return shipments.stream()
+                .map(shipmentReportMapper::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public ShipmentReportResponse getShipmentReportById(Long shipmentId) {
+        Shipment shipment = shipmentRepository.findByIdWithDetails(shipmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Shipment not found with id: " + shipmentId));
+        return shipmentReportMapper.toResponse(shipment);
     }
 }

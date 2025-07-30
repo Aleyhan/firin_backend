@@ -2,14 +2,14 @@
 package com.firinyonetim.backend.service;
 
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
-import com.firinyonetim.backend.dto.driver.response.DriverCustomerResponse; // YENİ
+import com.firinyonetim.backend.dto.driver.response.DriverCustomerResponse;
 import com.firinyonetim.backend.dto.route.RouteSummaryDto;
 import com.firinyonetim.backend.dto.route.request.RouteCreateRequest;
 import com.firinyonetim.backend.dto.route.response.RouteResponse;
 import com.firinyonetim.backend.entity.*;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.mapper.CustomerMapper;
-import com.firinyonetim.backend.mapper.DriverCustomerMapper; // YENİ
+import com.firinyonetim.backend.mapper.DriverCustomerMapper;
 import com.firinyonetim.backend.mapper.RouteMapper;
 import com.firinyonetim.backend.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -42,11 +42,11 @@ public class RouteService {
     private final UserRepository userRepository;
     private final RouteMapper routeMapper;
     private final CustomerMapper customerMapper;
-    private final DriverCustomerMapper driverCustomerMapper; // YENİ
+    private final DriverCustomerMapper driverCustomerMapper;
     private final TransactionRepository transactionRepository;
     private static final Logger logger = LoggerFactory.getLogger(RouteService.class);
 
-    // ... (createRoute, getAllRoutes, deleteRouteByStatus, vb. metotlar aynı)
+    // ... (diğer metotlar aynı kalacak)
     @Transactional
     public RouteResponse createRoute(RouteCreateRequest request) {
         if (routeRepository.existsByRouteCode(request.getRouteCode())) {
@@ -142,7 +142,6 @@ public class RouteService {
                 .ifPresent(routeAssignmentRepository::delete);
     }
 
-    // Bu metot yönetici paneli için
     public List<CustomerResponse> getCustomersByRoute(Long routeId) {
         return routeAssignmentRepository.findByRouteIdOrderByDeliveryOrderAsc(routeId).stream()
                 .map(RouteAssignment::getCustomer)
@@ -150,7 +149,6 @@ public class RouteService {
                 .collect(Collectors.toList());
     }
 
-    // YENİ METOT: Bu metot şoför paneli için
     @Transactional(readOnly = true)
     public List<DriverCustomerResponse> getCustomersByRouteForDriver(Long routeId) {
         return routeAssignmentRepository.findByRouteIdOrderByDeliveryOrderAsc(routeId).stream()
@@ -304,10 +302,15 @@ public class RouteService {
         LocalDateTime startOfNextDay = date.plusDays(1).atStartOfDay();
         List<Transaction> transactions = transactionRepository.findTransactionsBetween(startOfDay, startOfNextDay);
 
+        // Sadece onaylanmış işlemleri filtrele
+        List<Transaction> approvedTransactions = transactions.stream()
+                .filter(t -> t.getStatus() == TransactionStatus.APPROVED)
+                .collect(Collectors.toList());
+
         Map<Long, RouteDailySummaryDto> summaryMap = new HashMap<>();
         Map<Long, Map<Long, RouteProductSummaryDto>> productSummaryMap = new HashMap<>();
 
-        for (Transaction transaction : transactions) {
+        for (Transaction transaction : approvedTransactions) {
             if (transaction.getRoute() == null) {
                 continue;
             }

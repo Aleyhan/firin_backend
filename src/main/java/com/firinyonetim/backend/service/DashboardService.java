@@ -1,3 +1,4 @@
+// src/main/java/com/firinyonetim/backend/service/DashboardService.java
 package com.firinyonetim.backend.service;
 
 import com.firinyonetim.backend.dto.dashboard.DashboardDailySummaryDto;
@@ -7,6 +8,7 @@ import com.firinyonetim.backend.entity.ItemType;
 import com.firinyonetim.backend.entity.PaymentType;
 import com.firinyonetim.backend.entity.Transaction;
 import com.firinyonetim.backend.entity.TransactionItem;
+import com.firinyonetim.backend.entity.TransactionStatus; // YENİ
 import com.firinyonetim.backend.mapper.TransactionMapper;
 import com.firinyonetim.backend.repository.CustomerRepository;
 import com.firinyonetim.backend.repository.ProductRepository;
@@ -48,7 +50,12 @@ public class DashboardService {
 
         DashboardDailySummaryDto summary = new DashboardDailySummaryDto();
 
-        for (Transaction transaction : transactions) {
+        // Sadece onaylanmış işlemleri filtrele
+        List<Transaction> approvedTransactions = transactions.stream()
+                .filter(t -> t.getStatus() == TransactionStatus.APPROVED)
+                .collect(Collectors.toList());
+
+        for (Transaction transaction : approvedTransactions) {
             for (TransactionItem item : transaction.getItems()) {
                 if (item.getType() == ItemType.SATIS) {
                     summary.setTotalSales(summary.getTotalSales().add(item.getTotalPrice()));
