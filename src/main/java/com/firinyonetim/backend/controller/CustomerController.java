@@ -39,6 +39,7 @@ public class CustomerController {
     }
 
     @GetMapping("/search")
+    @PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER', 'MUHASEBE', 'SOFOR')")
     public ResponseEntity<PagedResponseDto<CustomerResponse>> searchCustomers(
             @RequestParam(required = false) String searchTerm,
             @RequestParam(required = false) Long routeId,
@@ -67,6 +68,7 @@ public class CustomerController {
         return ResponseEntity.ok(customerService.updateCustomer(customerId, request));
     }
 
+    @PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER', 'MUHASEBE', 'SOFOR')")
     @GetMapping
     public ResponseEntity<List<CustomerResponse>> getAllCustomers() {
         return ResponseEntity.ok(customerService.getAllCustomers());

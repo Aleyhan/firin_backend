@@ -23,6 +23,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.criteria.Predicate;
+import java.util.ArrayList;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -60,26 +62,30 @@ public class TransactionService {
         return transactionMapper.toTransactionResponse(savedTransaction);
     }
 
+    // BU METOT GÜNCELLENDİ
     private Transaction createTransactionInternal(TransactionCreateRequest request, boolean updateBalance) {
         Customer customer = customerRepository.findById(request.getCustomerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + request.getCustomerId()));
         User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
 
-        // YENİ KISIM: Gelen shipmentId ile sevkiyatı bul
-        Shipment shipment = shipmentRepository.findById(request.getShipmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Shipment not found with id: " + request.getShipmentId()));
-
-        // Güvenlik kontrolü: İşlemi yapan şoför, sevkiyatı başlatan şoförle aynı mı?
-        if (!shipment.getDriver().getId().equals(currentUser.getId())) {
-            throw new AccessDeniedException("Bu sevkiyata işlem ekleme yetkiniz yok.");
-        }
-
         Transaction transaction = new Transaction();
         transaction.setCustomer(customer);
         transaction.setCreatedBy(currentUser);
         transaction.setNotes(request.getNotes());
-        transaction.setShipment(shipment); // Sevkiyatı işleme bağla
-        transaction.setRoute(shipment.getRoute()); // Rotayı sevkiyattan al
+
+        // Sevkiyat ID'si varsa, sevkiyatı bul ve bağla. Rotayı da sevkiyattan al.
+        if (request.getShipmentId() != null) {
+            Shipment shipment = shipmentRepository.findById(request.getShipmentId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Shipment not found with id: " + request.getShipmentId()));
+            transaction.setShipment(shipment);
+            transaction.setRoute(shipment.getRoute());
+        }
+        // Sevkiyat ID'si yoksa ama Rota ID'si varsa, rotayı bağla (ofis işlemi).
+        else if (request.getRouteId() != null) {
+            Route route = routeRepository.findById(request.getRouteId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + request.getRouteId()));
+            transaction.setRoute(route);
+        }
 
         if (request.getTransactionDate() != null) {
             transaction.setTransactionDate(request.getTransactionDate().atTime(LocalTime.now()));
@@ -87,8 +93,15 @@ public class TransactionService {
             transaction.setTransactionDate(LocalDateTime.now());
         }
 
+        // Sevkiyat içi sıra numarasını sadece sevkiyata bağlı işlemlerde hesapla
+        if (transaction.getShipment() != null) {
+            long sequence = transactionRepository.countByShipmentId(transaction.getShipment().getId()) + 1;
+            transaction.setSequenceInShipment((int) sequence);
+        }
+
         BigDecimal balanceChange = BigDecimal.ZERO;
 
+        // ... (metodun geri kalanı - ürün ve ödeme işleme - aynı)
         if (request.getItems() != null && !request.getItems().isEmpty()) {
             Map<Long, CustomerProductAssignment> assignmentsMap = customerProductAssignmentRepository
                     .findByCustomerId(customer.getId()).stream()
@@ -363,6 +376,7 @@ public class TransactionService {
         }
     }
 
+    // METOT GÜNCELLENDİ
     @Transactional(readOnly = true)
     public PagedResponseDto<TransactionResponse> searchTransactions(LocalDate startDate, LocalDate endDate, Long customerId, Long routeId, TransactionStatus status, Pageable pageable) {
         Specification<Transaction> spec = Specification.where(null);
@@ -379,9 +393,15 @@ public class TransactionService {
             spec = spec.and((root, query, criteriaBuilder) ->
                     criteriaBuilder.equal(root.get("customer").get("id"), customerId));
         }
+        // ROTA FİLTRELEME MANTIĞI GÜNCELLENDİ
         if (routeId != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("route").get("id"), routeId));
+            if (routeId == -1) { // -1 özel değeri "Rotasız" anlamına gelir
+                spec = spec.and((root, query, criteriaBuilder) ->
+                        criteriaBuilder.isNull(root.get("route")));
+            } else { // Pozitif bir ID ise normal filtreleme yapılır
+                spec = spec.and((root, query, criteriaBuilder) ->
+                        criteriaBuilder.equal(root.get("route").get("id"), routeId));
+            }
         }
         if (status != null) {
             spec = spec.and((root, query, criteriaBuilder) ->
@@ -392,6 +412,8 @@ public class TransactionService {
         Page<TransactionResponse> dtoPage = transactionPage.map(transactionMapper::toTransactionResponse);
         return new PagedResponseDto<>(dtoPage);
     }
+
+
 
     private List<TransactionResponse> populateDailySequenceNumbers(List<Transaction> transactions) {
         Map<LocalDate, Integer> dailyCounters = new HashMap<>();

@@ -15,7 +15,5 @@ public class TransactionCreateRequest {
     private List<TransactionPaymentRequest> payments;
     private LocalDate transactionDate;
 
-    // YENİ ALAN
-    @NotNull
     private Long shipmentId;
 }

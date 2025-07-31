@@ -88,4 +88,15 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
 
     // YENİ METOT
     long countByShipmentId(Long shipmentId);
+
+    // YENİ METOT: Belirli bir tarihten önceki tüm onaylanmış işlemleri getirir.
+    @Query("SELECT t FROM Transaction t " +
+            "LEFT JOIN FETCH t.items " +
+            "LEFT JOIN FETCH t.payments " +
+            "WHERE t.customer.id IN :customerIds AND t.status = 'APPROVED' AND t.transactionDate < :date")
+    List<Transaction> findApprovedTransactionsForCustomersBeforeDate(
+            @Param("customerIds") List<Long> customerIds,
+            @Param("date") LocalDateTime date
+    );
+
 }

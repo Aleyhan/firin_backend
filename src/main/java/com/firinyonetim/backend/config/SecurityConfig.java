@@ -7,14 +7,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationProvider;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -51,12 +48,15 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**", "/api/health").permitAll()
+                        // ŞOFÖR İÇİN ÖZEL KURALLAR
                         .requestMatchers("/api/driver/**").hasRole("SOFOR")
-                        .requestMatchers("/api/admin/**").hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE")
-                        // YENİ İZİNLER
+                        .requestMatchers(HttpMethod.GET, "/api/customers").hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE", "SOFOR")
+                        .requestMatchers(HttpMethod.GET, "/api/routes").hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE", "SOFOR")
                         .requestMatchers(HttpMethod.GET, "/api/products").hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE", "SOFOR")
                         .requestMatchers(HttpMethod.GET, "/api/routes/{id}").hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE", "SOFOR")
                         .requestMatchers(HttpMethod.GET, "/api/customers/{id}/products").hasAnyRole("YONETICI", "DEVELOPER", "SOFOR", "MUHASEBE")
+                        // YÖNETİCİ/MUHASEBE İÇİN GENEL KURALLAR
+                        .requestMatchers("/api/admin/**").hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE")
                         .anyRequest().hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE")
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -68,7 +68,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:5176", "http://192.168.1.107:5178"));
+        configuration.setAllowedOrigins(Arrays.asList("http://localhost:5176", "http://19-1.107:5178"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type"));
         configuration.setAllowCredentials(true);

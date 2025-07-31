@@ -36,6 +36,7 @@ public class RouteController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER', 'MUHASEBE', 'SOFOR')") // <<< ROL KONTROLÜ EKLENDİ
     public ResponseEntity<List<RouteResponse>> getAllRoutes() {
         return ResponseEntity.ok(routeService.getAllRoutes());
     }
