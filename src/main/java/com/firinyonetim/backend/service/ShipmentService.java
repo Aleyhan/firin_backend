@@ -17,16 +17,18 @@ import com.firinyonetim.backend.mapper.ShipmentReportMapper;
 import com.firinyonetim.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -110,14 +112,18 @@ public class ShipmentService {
         shipment.setEndNotes(request.getEndNotes());
         shipment.setStatus(ShipmentStatus.COMPLETED);
 
-        List<Transaction> transactions = transactionRepository.findByShipmentId(shipmentId);
+        List<Transaction> allTransactions = transactionRepository.findByShipmentId(shipmentId);
 
-        Map<Long, Integer> salesMap = transactions.stream()
+        List<Transaction> approvedTransactions = allTransactions.stream()
+                .filter(t -> t.getStatus() == TransactionStatus.APPROVED)
+                .collect(Collectors.toList());
+
+        Map<Long, Integer> salesMap = approvedTransactions.stream()
                 .flatMap(t -> t.getItems().stream())
                 .filter(item -> item.getType() == ItemType.SATIS)
                 .collect(Collectors.groupingBy(item -> item.getProduct().getId(), Collectors.summingInt(TransactionItem::getQuantity)));
 
-        Map<Long, Integer> returnsMap = transactions.stream()
+        Map<Long, Integer> returnsMap = approvedTransactions.stream()
                 .flatMap(t -> t.getItems().stream())
                 .filter(item -> item.getType() == ItemType.IADE)
                 .collect(Collectors.groupingBy(item -> item.getProduct().getId(), Collectors.summingInt(TransactionItem::getQuantity)));
@@ -153,51 +159,11 @@ public class ShipmentService {
         shipmentRepository.save(shipment);
     }
 
+    // METOT GÜNCELLENDİ
     @Transactional(readOnly = true)
     public PagedResponseDto<ShipmentReportResponse> searchShipments(LocalDate startDate, LocalDate endDate, Long routeId, Long driverId, ShipmentStatus status, Pageable pageable) {
-        // 1. Sadece WHERE koşullarını içeren Specification'ı oluştur
-        Specification<Shipment> spec = (root, query, cb) -> {
-            Specification<Shipment> finalSpec = Specification.where(null);
-            if (status != null) {
-                finalSpec = finalSpec.and((r, q, c) -> c.equal(r.get("status"), status));
-            }
-            if (startDate != null) {
-                finalSpec = finalSpec.and((r, q, c) -> c.greaterThanOrEqualTo(r.get("shipmentDate"), startDate));
-            }
-            if (endDate != null) {
-                finalSpec = finalSpec.and((r, q, c) -> c.lessThanOrEqualTo(r.get("shipmentDate"), endDate));
-            }
-            if (routeId != null) {
-                finalSpec = finalSpec.and((r, q, c) -> c.equal(r.get("route").get("id"), routeId));
-            }
-            if (driverId != null) {
-                finalSpec = finalSpec.and((r, q, c) -> c.equal(r.get("driver").get("id"), driverId));
-            }
-            return finalSpec.toPredicate(root, query, cb);
-        };
-
-        // 2. Sayfalanmış ID'leri al
-        Page<Shipment> shipmentPage = shipmentRepository.findAll(spec, pageable);
-        List<Long> ids = shipmentPage.getContent().stream().map(Shipment::getId).collect(Collectors.toList());
-
-        if (ids.isEmpty()) {
-            return new PagedResponseDto<>(Collections.emptyList(), shipmentPage.getNumber(), shipmentPage.getTotalElements(), shipmentPage.getTotalPages());
-        }
-
-        // 3. ID'lere göre detaylı veriyi çek
-        List<Shipment> shipmentsWithDetails = shipmentRepository.findByIdsWithDetails(ids);
-
-        // 4. Orijinal sıralamayı korumak için Map kullan
-        Map<Long, Shipment> detailsMap = shipmentsWithDetails.stream()
-                .collect(Collectors.toMap(Shipment::getId, Function.identity()));
-
-        // 5. Orijinal sıralamaya göre DTO listesini oluştur
-        List<ShipmentReportResponse> dtoList = ids.stream()
-                .map(id -> detailsMap.get(id))
-                .map(shipmentReportMapper::toResponse)
-                .collect(Collectors.toList());
-
-        Page<ShipmentReportResponse> dtoPage = new PageImpl<>(dtoList, pageable, shipmentPage.getTotalElements());
+        Page<Shipment> shipmentPage = shipmentRepository.searchShipments(startDate, endDate, routeId, driverId, status, pageable);
+        Page<ShipmentReportResponse> dtoPage = shipmentPage.map(shipmentReportMapper::toResponse);
         return new PagedResponseDto<>(dtoPage);
     }
 
