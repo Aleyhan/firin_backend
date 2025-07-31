@@ -35,15 +35,26 @@ public class ShipmentItem {
     @Column(name = "total_units_taken")
     private int totalUnitsTaken;
 
-    // Gün Sonu Sayımı
-    @Column(name = "crates_returned")
-    private Integer cratesReturned;
+    // --- GÜN SONU SAYIMI (GÜNCELLENDİ) ---
+    // Önceki alanlar kaldırıldı: cratesReturned, unitsReturned, totalUnitsReturned
 
-    @Column(name = "units_returned")
-    private Integer unitsReturned;
+    // YENİ ALANLAR: Günlük Ürünler (Satılamayıp Kalan)
+    @Column(name = "daily_crates_returned")
+    private Integer dailyCratesReturned;
 
-    @Column(name = "total_units_returned")
-    private Integer totalUnitsReturned;
+    @Column(name = "daily_units_returned")
+    private Integer dailyUnitsReturned;
 
-    // HESAPLANAN ALANLAR KALDIRILDI
+    @Column(name = "total_daily_units_returned")
+    private Integer totalDailyUnitsReturned;
+
+    // YENİ ALANLAR: İade Ürünler (Önceki Günden Gelen)
+    @Column(name = "return_crates_taken")
+    private Integer returnCratesTaken;
+
+    @Column(name = "return_units_taken")
+    private Integer returnUnitsTaken;
+
+    @Column(name = "total_return_units_taken")
+    private Integer totalReturnUnitsTaken;
 }

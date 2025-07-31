@@ -10,5 +10,6 @@ import org.mapstruct.Mapping;
 public interface ShipmentItemReportMapper {
     @Mapping(source = "product.id", target = "productId")
     @Mapping(source = "product.name", target = "productName")
+        // Diğer alanlar aynı isimde olduğu için otomatik map'lenecek
     ShipmentItemReportDto toDto(ShipmentItem shipmentItem);
 }

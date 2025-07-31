@@ -13,12 +13,20 @@ public class ShipmentItemReportDto {
     private int unitsTaken;
     private int totalUnitsTaken;
 
-    // Gün Sonu
-    private Integer cratesReturned;
-    private Integer unitsReturned;
-    private Integer totalUnitsReturned;
+    // --- GÜN SONU (GÜNCELLENDİ) ---
+    // Önceki alanlar kaldırıldı: cratesReturned, unitsReturned, totalUnitsReturned
 
-    // Hesaplanan Değerler
+    // YENİ ALANLAR: Günlük Kalan
+    private Integer dailyCratesReturned;
+    private Integer dailyUnitsReturned;
+    private Integer totalDailyUnitsReturned;
+
+    // YENİ ALANLAR: İade Gelen
+    private Integer returnCratesTaken;
+    private Integer returnUnitsTaken;
+    private Integer totalReturnUnitsTaken;
+
+    // Anlık Hesaplanacak Değerler
     private Integer totalUnitsSold;
     private Integer totalUnitsReturnedByCustomer;
     private Integer expectedUnitsInVehicle;

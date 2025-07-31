@@ -6,6 +6,10 @@ import lombok.Data;
 @Data
 public class ShipmentItemEndRequest {
     private Long productId;
-    private int cratesReturned;
-    private int unitsReturned;
+
+    // YENİ ALANLAR
+    private int dailyCratesReturned;
+    private int dailyUnitsReturned;
+    private int returnCratesTaken;
+    private int returnUnitsTaken;
 }

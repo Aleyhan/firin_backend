@@ -16,10 +16,13 @@ import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.mapper.ShipmentMapper;
 import com.firinyonetim.backend.mapper.ShipmentReportMapper;
 import com.firinyonetim.backend.repository.*;
+import jakarta.persistence.criteria.Predicate; // YENİ
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort; // YENİ
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -28,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator; // YENİ
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,7 +50,7 @@ public class ShipmentService {
     private final ShipmentMapper shipmentMapper;
     private final ShipmentReportMapper shipmentReportMapper;
 
-    // ... createShipment ve getTodaysShipmentForRoute metotları aynı ...
+    // ... createShipment, getTodaysShipmentForRoute, endShipment metotları aynı ...
     @Transactional
     public void createShipment(ShipmentCreateRequest request) {
         User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -97,7 +101,6 @@ public class ShipmentService {
                 .orElse(null);
     }
 
-    // METOT GÜNCELLENDİ: Artık sadece şoförün girdiği veriyi kaydediyor.
     @Transactional
     public void endShipment(Long shipmentId, ShipmentEndRequest request) {
         User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -127,38 +130,80 @@ public class ShipmentService {
                     throw new IllegalStateException("Ürün '" + product.getName() + "' için kasa adedi tanımlanmamış.");
                 }
 
-                item.setCratesReturned(itemEndRequest.getCratesReturned());
-                item.setUnitsReturned(itemEndRequest.getUnitsReturned());
-                int totalReturned = (itemEndRequest.getCratesReturned() * product.getUnitsPerCrate()) + itemEndRequest.getUnitsReturned();
-                item.setTotalUnitsReturned(totalReturned);
+                item.setDailyCratesReturned(itemEndRequest.getDailyCratesReturned());
+                item.setDailyUnitsReturned(itemEndRequest.getDailyUnitsReturned());
+                int totalDailyReturned = (itemEndRequest.getDailyCratesReturned() * product.getUnitsPerCrate()) + itemEndRequest.getDailyUnitsReturned();
+                item.setTotalDailyUnitsReturned(totalDailyReturned);
+
+                item.setReturnCratesTaken(itemEndRequest.getReturnCratesTaken());
+                item.setReturnUnitsTaken(itemEndRequest.getReturnUnitsTaken());
+                int totalReturnTaken = (itemEndRequest.getReturnCratesTaken() * product.getUnitsPerCrate()) + itemEndRequest.getReturnUnitsTaken();
+                item.setTotalReturnUnitsTaken(totalReturnTaken);
             }
         }
 
         shipmentRepository.save(shipment);
     }
 
+    // METOT TAMAMEN YENİLENDİ
     @Transactional(readOnly = true)
     public PagedResponseDto<ShipmentReportResponse> searchShipments(LocalDate startDate, LocalDate endDate, Long routeId, Long driverId, ShipmentStatus status, Pageable pageable) {
-        Page<Shipment> shipmentPage = shipmentRepository.searchShipments(startDate, endDate, routeId, driverId, status, pageable);
-        Page<ShipmentReportResponse> dtoPage = shipmentPage.map(shipmentReportMapper::toResponse);
+        Specification<Shipment> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+            if (startDate != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("shipmentDate"), startDate));
+            }
+            if (endDate != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("shipmentDate"), endDate));
+            }
+            if (routeId != null) {
+                predicates.add(cb.equal(root.get("route").get("id"), routeId));
+            }
+            if (driverId != null) {
+                predicates.add(cb.equal(root.get("driver").get("id"), driverId));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        Page<Shipment> shipmentPage = shipmentRepository.findAll(spec, pageable);
+        List<Long> ids = shipmentPage.getContent().stream().map(Shipment::getId).collect(Collectors.toList());
+
+        if (ids.isEmpty()) {
+            return new PagedResponseDto<>(Collections.emptyList(), shipmentPage.getNumber(), shipmentPage.getTotalElements(), shipmentPage.getTotalPages());
+        }
+
+        List<Shipment> shipmentsWithDetails = shipmentRepository.findByIdsWithDetails(ids);
+
+        // Orijinal sıralamayı korumak için Map kullan ve sırala
+        Map<Long, Shipment> detailsMap = shipmentsWithDetails.stream()
+                .collect(Collectors.toMap(Shipment::getId, Function.identity()));
+
+        List<Shipment> sortedShipments = ids.stream()
+                .map(detailsMap::get)
+                .collect(Collectors.toList());
+
+        List<ShipmentReportResponse> dtoList = sortedShipments.stream()
+                .map(shipmentReportMapper::toResponse)
+                .collect(Collectors.toList());
+
+        Page<ShipmentReportResponse> dtoPage = new PageImpl<>(dtoList, pageable, shipmentPage.getTotalElements());
         return new PagedResponseDto<>(dtoPage);
     }
 
-    // METOT GÜNCELLENDİ: Artık tüm hesaplamaları anlık olarak yapıyor.
     @Transactional(readOnly = true)
     public ShipmentReportResponse getShipmentReportById(Long shipmentId) {
         Shipment shipment = shipmentRepository.findByIdWithDetails(shipmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Shipment not found with id: " + shipmentId));
 
-        // 1. Temel sevkiyat bilgilerini DTO'ya map'le
         ShipmentReportResponse response = shipmentReportMapper.toResponse(shipment);
 
-        // 2. Sevkiyata ait ONAYLANMIŞ işlemleri çek
         List<Transaction> approvedTransactions = transactionRepository.findByShipmentId(shipmentId).stream()
                 .filter(t -> t.getStatus() == TransactionStatus.APPROVED)
                 .collect(Collectors.toList());
 
-        // 3. Ürün bazında satış ve iade adetlerini hesapla
         Map<Long, Integer> salesMap = approvedTransactions.stream()
                 .flatMap(t -> t.getItems().stream())
                 .filter(item -> item.getType() == ItemType.SATIS)
@@ -169,22 +214,22 @@ public class ShipmentService {
                 .filter(item -> item.getType() == ItemType.IADE)
                 .collect(Collectors.groupingBy(item -> item.getProduct().getId(), Collectors.summingInt(TransactionItem::getQuantity)));
 
-        // 4. Her bir sevkiyat kalemi için DTO oluştur ve hesaplamaları yap
         List<ShipmentItemReportDto> itemDtos = shipment.getItems().stream().map(item -> {
             ShipmentItemReportDto dto = new ShipmentItemReportDto();
             Product product = item.getProduct();
 
-            // Şoförün girdiği veriler
             dto.setProductId(product.getId());
             dto.setProductName(product.getName());
             dto.setCratesTaken(item.getCratesTaken());
             dto.setUnitsTaken(item.getUnitsTaken());
             dto.setTotalUnitsTaken(item.getTotalUnitsTaken());
-            dto.setCratesReturned(item.getCratesReturned());
-            dto.setUnitsReturned(item.getUnitsReturned());
-            dto.setTotalUnitsReturned(item.getTotalUnitsReturned());
+            dto.setDailyCratesReturned(item.getDailyCratesReturned());
+            dto.setDailyUnitsReturned(item.getDailyUnitsReturned());
+            dto.setTotalDailyUnitsReturned(item.getTotalDailyUnitsReturned());
+            dto.setReturnCratesTaken(item.getReturnCratesTaken());
+            dto.setReturnUnitsTaken(item.getReturnUnitsTaken());
+            dto.setTotalReturnUnitsTaken(item.getTotalReturnUnitsTaken());
 
-            // Anlık hesaplanan veriler
             int totalSold = salesMap.getOrDefault(product.getId(), 0);
             int totalReturnedByCustomer = returnsMap.getOrDefault(product.getId(), 0);
             int expectedInVehicle = item.getTotalUnitsTaken() - totalSold + totalReturnedByCustomer;
@@ -193,9 +238,8 @@ public class ShipmentService {
             dto.setTotalUnitsReturnedByCustomer(totalReturnedByCustomer);
             dto.setExpectedUnitsInVehicle(expectedInVehicle);
 
-            // Farkı sadece sefer tamamlandıysa hesapla
-            if (shipment.getStatus() == ShipmentStatus.COMPLETED && item.getTotalUnitsReturned() != null) {
-                dto.setVariance(item.getTotalUnitsReturned() - expectedInVehicle);
+            if (shipment.getStatus() == ShipmentStatus.COMPLETED && item.getTotalDailyUnitsReturned() != null) {
+                dto.setVariance(item.getTotalDailyUnitsReturned() - expectedInVehicle);
             }
 
             return dto;
@@ -226,9 +270,9 @@ public class ShipmentService {
                 });
 
                 summaryDto.setTotalUnitsTaken(summaryDto.getTotalUnitsTaken() + item.getTotalUnitsTaken());
-                if (item.getTotalUnitsReturned() != null) {
-                    summaryDto.setTotalUnitsReturned(summaryDto.getTotalUnitsReturned() + item.getTotalUnitsReturned());
-                }
+                int totalReturned = (item.getTotalDailyUnitsReturned() != null ? item.getTotalDailyUnitsReturned() : 0)
+                        + (item.getTotalReturnUnitsTaken() != null ? item.getTotalReturnUnitsTaken() : 0);
+                summaryDto.setTotalUnitsReturned(summaryDto.getTotalUnitsReturned() + totalReturned);
             }
         }
 

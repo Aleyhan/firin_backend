@@ -3,9 +3,8 @@ package com.firinyonetim.backend.repository;
 
 import com.firinyonetim.backend.entity.Shipment;
 import com.firinyonetim.backend.entity.ShipmentStatus;
-import org.springframework.data.domain.Page; // YENİ
-import org.springframework.data.domain.Pageable; // YENİ
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -13,8 +12,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
-// DEĞİŞİKLİK: JpaSpecificationExecutor kaldırıldı
-public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
+public interface ShipmentRepository extends JpaRepository<Shipment, Long>, JpaSpecificationExecutor<Shipment> {
 
     @Query("SELECT COUNT(s) FROM Shipment s WHERE s.route.id = :routeId AND s.shipmentDate = :date")
     int countByRouteIdAndShipmentDate(Long routeId, LocalDate date);
@@ -33,25 +31,5 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
     @Query("SELECT s FROM Shipment s JOIN FETCH s.route JOIN FETCH s.driver WHERE s.id IN :ids")
     List<Shipment> findByIdsWithDetails(@Param("ids") List<Long> ids);
 
-    // YENİ METOT: Tüm filtreleme ve sayfalama işlemlerini yapar
-    @Query(value = "SELECT s FROM Shipment s JOIN FETCH s.route r JOIN FETCH s.driver d WHERE " +
-            "(:status IS NULL OR s.status = :status) AND " +
-            "(:startDate IS NULL OR s.shipmentDate >= :startDate) AND " +
-            "(:endDate IS NULL OR s.shipmentDate <= :endDate) AND " +
-            "(:routeId IS NULL OR r.id = :routeId) AND " +
-            "(:driverId IS NULL OR d.id = :driverId)",
-            countQuery = "SELECT count(s) FROM Shipment s WHERE " +
-                    "(:status IS NULL OR s.status = :status) AND " +
-                    "(:startDate IS NULL OR s.shipmentDate >= :startDate) AND " +
-                    "(:endDate IS NULL OR s.shipmentDate <= :endDate) AND " +
-                    "(:routeId IS NULL OR s.route.id = :routeId) AND " +
-                    "(:driverId IS NULL OR s.driver.id = :driverId)")
-    Page<Shipment> searchShipments(
-            @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate,
-            @Param("routeId") Long routeId,
-            @Param("driverId") Long driverId,
-            @Param("status") ShipmentStatus status,
-            Pageable pageable
-    );
+    // Özel searchShipments sorgusu kaldırıldı.
 }
