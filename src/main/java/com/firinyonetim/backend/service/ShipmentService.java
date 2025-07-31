@@ -27,6 +27,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.firinyonetim.backend.dto.shipment.request.ShipmentItemUpdateRequest;
+import com.firinyonetim.backend.dto.shipment.request.ShipmentUpdateRequest;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -49,6 +51,7 @@ public class ShipmentService {
     private final TransactionRepository transactionRepository;
     private final ShipmentMapper shipmentMapper;
     private final ShipmentReportMapper shipmentReportMapper;
+
 
     // ... createShipment, getTodaysShipmentForRoute, endShipment metotları aynı ...
     @Transactional
@@ -282,4 +285,55 @@ public class ShipmentService {
 
         return result;
     }
+
+    // YENİ METOT
+    @Transactional
+    public ShipmentReportResponse updateShipment(Long shipmentId, ShipmentUpdateRequest request) {
+        Shipment shipment = shipmentRepository.findByIdWithDetails(shipmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Shipment not found with id: " + shipmentId));
+
+        shipment.setStartNotes(request.getStartNotes());
+        shipment.setEndNotes(request.getEndNotes());
+
+        Map<Long, ShipmentItem> shipmentItemMap = shipment.getItems().stream()
+                .collect(Collectors.toMap(item -> item.getProduct().getId(), Function.identity()));
+
+        for (ShipmentItemUpdateRequest itemUpdateRequest : request.getItems()) {
+            ShipmentItem item = shipmentItemMap.get(itemUpdateRequest.getProductId());
+            if (item != null) {
+                Product product = item.getProduct();
+                if (product.getUnitsPerCrate() == null || product.getUnitsPerCrate() <= 0) {
+                    throw new IllegalStateException("Ürün '" + product.getName() + "' için kasa adedi tanımlanmamış.");
+                }
+
+                // Başlangıç stoklarını güncelle ve toplamı yeniden hesapla
+                item.setCratesTaken(itemUpdateRequest.getCratesTaken());
+                item.setUnitsTaken(itemUpdateRequest.getUnitsTaken());
+                item.setTotalUnitsTaken((itemUpdateRequest.getCratesTaken() * product.getUnitsPerCrate()) + itemUpdateRequest.getUnitsTaken());
+
+                // Bitiş stoklarını güncelle ve toplamları yeniden hesapla
+                item.setDailyCratesReturned(itemUpdateRequest.getDailyCratesReturned());
+                item.setDailyUnitsReturned(itemUpdateRequest.getDailyUnitsReturned());
+                if (itemUpdateRequest.getDailyCratesReturned() != null && itemUpdateRequest.getDailyUnitsReturned() != null) {
+                    item.setTotalDailyUnitsReturned((itemUpdateRequest.getDailyCratesReturned() * product.getUnitsPerCrate()) + itemUpdateRequest.getDailyUnitsReturned());
+                } else {
+                    item.setTotalDailyUnitsReturned(null);
+                }
+
+                item.setReturnCratesTaken(itemUpdateRequest.getReturnCratesTaken());
+                item.setReturnUnitsTaken(itemUpdateRequest.getReturnUnitsTaken());
+                if (itemUpdateRequest.getReturnCratesTaken() != null && itemUpdateRequest.getReturnUnitsTaken() != null) {
+                    item.setTotalReturnUnitsTaken((itemUpdateRequest.getReturnCratesTaken() * product.getUnitsPerCrate()) + itemUpdateRequest.getReturnUnitsTaken());
+                } else {
+                    item.setTotalReturnUnitsTaken(null);
+                }
+            }
+        }
+
+        Shipment savedShipment = shipmentRepository.save(shipment);
+        // Güncellenmiş ve yeniden hesaplanmış veriyi döndür
+        return getShipmentReportById(savedShipment.getId());
+    }
+
+
 }

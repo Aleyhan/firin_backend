@@ -2,12 +2,14 @@
 package com.firinyonetim.backend.controller;
 
 import com.firinyonetim.backend.dto.PagedResponseDto;
+import com.firinyonetim.backend.dto.shipment.request.ShipmentUpdateRequest;
 import com.firinyonetim.backend.dto.shipment.response.ShipmentReportResponse;
 import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
 import com.firinyonetim.backend.entity.ShipmentStatus; // YENİ
 import com.firinyonetim.backend.service.RouteService;
 import com.firinyonetim.backend.service.ShipmentService;
 import com.firinyonetim.backend.service.TransactionService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -71,4 +73,13 @@ public class AdminController {
     public ResponseEntity<ShipmentReportResponse> getShipmentById(@PathVariable Long id) {
         return ResponseEntity.ok(shipmentService.getShipmentReportById(id));
     }
+
+    // YENİ ENDPOINT
+    @PutMapping("/shipments/{id}")
+    public ResponseEntity<ShipmentReportResponse> updateShipment(
+            @PathVariable Long id,
+            @Valid @RequestBody ShipmentUpdateRequest request) {
+        return ResponseEntity.ok(shipmentService.updateShipment(id, request));
+    }
+
 }
