@@ -35,26 +35,15 @@ public class ShipmentItem {
     @Column(name = "total_units_taken")
     private int totalUnitsTaken;
 
-    // YENİ ALANLAR: Gün Sonu Sayımı
+    // Gün Sonu Sayımı
     @Column(name = "crates_returned")
-    private Integer cratesReturned; // Araçta kalan kasa
+    private Integer cratesReturned;
 
     @Column(name = "units_returned")
-    private Integer unitsReturned; // Araçta kalan adet
+    private Integer unitsReturned;
 
     @Column(name = "total_units_returned")
-    private Integer totalUnitsReturned; // Araçta kalan toplam adet
+    private Integer totalUnitsReturned;
 
-    // YENİ ALANLAR: Raporlama için hesaplanacak değerler
-    @Column(name = "total_units_sold")
-    private Integer totalUnitsSold; // Gün içi toplam satış
-
-    @Column(name = "total_units_returned_by_customer")
-    private Integer totalUnitsReturnedByCustomer; // Müşteriden iade alınan
-
-    @Column(name = "expected_units_in_vehicle")
-    private Integer expectedUnitsInVehicle; // Araçta olması beklenen
-
-    @Column(name = "variance")
-    private Integer variance; // Fark (Beklenen - Gerçekleşen)
+    // HESAPLANAN ALANLAR KALDIRILDI
 }
