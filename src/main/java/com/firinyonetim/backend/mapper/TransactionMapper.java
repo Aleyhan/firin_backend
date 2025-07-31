@@ -22,5 +22,6 @@ public interface TransactionMapper {
     // YENİ MAPPING'LER
     @Mapping(source = "shipment.id", target = "shipmentId")
     @Mapping(source = "shipment.sequenceNumber", target = "shipmentSequenceNumber")
+    @Mapping(source = "sequenceInShipment", target = "sequenceInShipment") // YENİ MAPPING
     TransactionResponse toTransactionResponse(Transaction transaction);
 }

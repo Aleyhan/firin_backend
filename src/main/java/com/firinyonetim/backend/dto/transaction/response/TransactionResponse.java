@@ -28,4 +28,6 @@ public class TransactionResponse {
     // YENİ ALANLAR
     private Long shipmentId;
     private Integer shipmentSequenceNumber;
+    private Integer sequenceInShipment; // YENİ ALAN
+
 }

@@ -6,6 +6,7 @@ import com.firinyonetim.backend.dto.route.request.RouteCreateRequest;
 import com.firinyonetim.backend.dto.route.request.RouteUpdateRequest;
 import com.firinyonetim.backend.dto.route.response.RouteResponse;
 import com.firinyonetim.backend.service.RouteService;
+import com.firinyonetim.backend.service.ShipmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -13,6 +14,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import com.firinyonetim.backend.dto.route.RouteShipmentSummaryDto;
+
 
 import java.time.LocalDate;
 import java.util.List;
@@ -25,6 +28,7 @@ import java.util.Map;
 public class RouteController {
 
     private final RouteService routeService;
+    private final ShipmentService shipmentService; // <<< ShipmentService Eklendi
 
     @PostMapping
     public ResponseEntity<RouteResponse> createRoute(@Valid @RequestBody RouteCreateRequest request) {
@@ -109,6 +113,18 @@ public class RouteController {
     public ResponseEntity<List<RouteDailySummaryDto>> getDailySummaries(
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return ResponseEntity.ok(routeService.getDailySummaries(date));
+    }
+
+    // YENİ ENDPOINT
+    @GetMapping("/{routeId}/shipment-summary")
+    public ResponseEntity<RouteShipmentSummaryDto> getShipmentSummary(
+            @PathVariable Long routeId,
+            @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        RouteShipmentSummaryDto summary = shipmentService.getShipmentSummaryForRouteAndDate(routeId, date);
+        if (summary == null) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(summary);
     }
 
 }

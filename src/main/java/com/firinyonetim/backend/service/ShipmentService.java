@@ -22,11 +22,11 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.firinyonetim.backend.dto.route.RouteShipmentProductSummaryDto;
+import com.firinyonetim.backend.dto.route.RouteShipmentSummaryDto;
 
 import java.time.LocalDate;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -194,4 +194,40 @@ public class ShipmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Shipment not found with id: " + shipmentId));
         return shipmentReportMapper.toResponse(shipment);
     }
+
+    // YENİ METOT
+    @Transactional(readOnly = true)
+    public RouteShipmentSummaryDto getShipmentSummaryForRouteAndDate(Long routeId, LocalDate date) {
+        List<Shipment> shipments = shipmentRepository.findByRouteIdAndShipmentDateWithDetails(routeId, date);
+
+        if (shipments.isEmpty()) {
+            return null;
+        }
+
+        Map<Product, RouteShipmentProductSummaryDto> productSummaryMap = new HashMap<>();
+
+        for (Shipment shipment : shipments) {
+            for (ShipmentItem item : shipment.getItems()) {
+                Product product = item.getProduct();
+                RouteShipmentProductSummaryDto summaryDto = productSummaryMap.computeIfAbsent(product, p -> {
+                    RouteShipmentProductSummaryDto newDto = new RouteShipmentProductSummaryDto();
+                    newDto.setProductId(p.getId());
+                    newDto.setProductName(p.getName());
+                    return newDto;
+                });
+
+                summaryDto.setTotalUnitsTaken(summaryDto.getTotalUnitsTaken() + item.getTotalUnitsTaken());
+                if (item.getTotalUnitsReturned() != null) {
+                    summaryDto.setTotalUnitsReturned(summaryDto.getTotalUnitsReturned() + item.getTotalUnitsReturned());
+                }
+            }
+        }
+
+        RouteShipmentSummaryDto result = new RouteShipmentSummaryDto();
+        result.setTotalShipments(shipments.size());
+        result.setProductSummaries(new ArrayList<>(productSummaryMap.values()));
+
+        return result;
+    }
+
 }

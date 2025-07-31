@@ -7,9 +7,7 @@ import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 @Data
@@ -28,9 +26,8 @@ public class Transaction {
     @JoinColumn(name = "route_id", nullable = true)
     private Route route;
 
-    // DEĞİŞİKLİK BURADA
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "shipment_id", nullable = true) // false -> true olarak değiştirildi
+    @JoinColumn(name = "shipment_id", nullable = true)
     private Shipment shipment;
 
     @Column(nullable = false)
@@ -48,6 +45,10 @@ public class Transaction {
 
     @Column(columnDefinition = "TEXT")
     private String rejectionReason;
+
+    // YENİ ALAN: Sevkiyat içindeki işlem sırası
+    @Column(name = "sequence_in_shipment")
+    private Integer sequenceInShipment;
 
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
