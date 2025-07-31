@@ -2,6 +2,8 @@
 package com.firinyonetim.backend.service;
 
 import com.firinyonetim.backend.dto.PagedResponseDto;
+import com.firinyonetim.backend.dto.route.RouteShipmentProductSummaryDto;
+import com.firinyonetim.backend.dto.route.RouteShipmentSummaryDto;
 import com.firinyonetim.backend.dto.shipment.request.ShipmentCreateRequest;
 import com.firinyonetim.backend.dto.shipment.request.ShipmentEndRequest;
 import com.firinyonetim.backend.dto.shipment.request.ShipmentItemEndRequest;
@@ -13,17 +15,15 @@ import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.mapper.ShipmentMapper;
 import com.firinyonetim.backend.mapper.ShipmentReportMapper;
 import com.firinyonetim.backend.repository.*;
-import jakarta.persistence.criteria.JoinType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.firinyonetim.backend.dto.route.RouteShipmentProductSummaryDto;
-import com.firinyonetim.backend.dto.route.RouteShipmentSummaryDto;
 
 import java.time.LocalDate;
 import java.util.*;
@@ -153,21 +153,14 @@ public class ShipmentService {
         shipmentRepository.save(shipment);
     }
 
-    // METOT İMZASI GÜNCELLENDİ
     @Transactional(readOnly = true)
     public PagedResponseDto<ShipmentReportResponse> searchShipments(LocalDate startDate, LocalDate endDate, Long routeId, Long driverId, ShipmentStatus status, Pageable pageable) {
+        // 1. Sadece WHERE koşullarını içeren Specification'ı oluştur
         Specification<Shipment> spec = (root, query, cb) -> {
-            root.fetch("route", JoinType.LEFT);
-            root.fetch("driver", JoinType.LEFT);
-            query.distinct(true);
-
             Specification<Shipment> finalSpec = Specification.where(null);
-
-            // DURUM FİLTRESİ EKLENDİ
             if (status != null) {
                 finalSpec = finalSpec.and((r, q, c) -> c.equal(r.get("status"), status));
             }
-
             if (startDate != null) {
                 finalSpec = finalSpec.and((r, q, c) -> c.greaterThanOrEqualTo(r.get("shipmentDate"), startDate));
             }
@@ -183,8 +176,28 @@ public class ShipmentService {
             return finalSpec.toPredicate(root, query, cb);
         };
 
+        // 2. Sayfalanmış ID'leri al
         Page<Shipment> shipmentPage = shipmentRepository.findAll(spec, pageable);
-        Page<ShipmentReportResponse> dtoPage = shipmentPage.map(shipmentReportMapper::toResponse);
+        List<Long> ids = shipmentPage.getContent().stream().map(Shipment::getId).collect(Collectors.toList());
+
+        if (ids.isEmpty()) {
+            return new PagedResponseDto<>(Collections.emptyList(), shipmentPage.getNumber(), shipmentPage.getTotalElements(), shipmentPage.getTotalPages());
+        }
+
+        // 3. ID'lere göre detaylı veriyi çek
+        List<Shipment> shipmentsWithDetails = shipmentRepository.findByIdsWithDetails(ids);
+
+        // 4. Orijinal sıralamayı korumak için Map kullan
+        Map<Long, Shipment> detailsMap = shipmentsWithDetails.stream()
+                .collect(Collectors.toMap(Shipment::getId, Function.identity()));
+
+        // 5. Orijinal sıralamaya göre DTO listesini oluştur
+        List<ShipmentReportResponse> dtoList = ids.stream()
+                .map(id -> detailsMap.get(id))
+                .map(shipmentReportMapper::toResponse)
+                .collect(Collectors.toList());
+
+        Page<ShipmentReportResponse> dtoPage = new PageImpl<>(dtoList, pageable, shipmentPage.getTotalElements());
         return new PagedResponseDto<>(dtoPage);
     }
 
@@ -195,7 +208,6 @@ public class ShipmentService {
         return shipmentReportMapper.toResponse(shipment);
     }
 
-    // YENİ METOT
     @Transactional(readOnly = true)
     public RouteShipmentSummaryDto getShipmentSummaryForRouteAndDate(Long routeId, LocalDate date) {
         List<Shipment> shipments = shipmentRepository.findByRouteIdAndShipmentDateWithDetails(routeId, date);
@@ -229,5 +241,4 @@ public class ShipmentService {
 
         return result;
     }
-
 }
