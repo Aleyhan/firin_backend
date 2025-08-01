@@ -1,14 +1,21 @@
 // src/main/java/com/firinyonetim/backend/service/ReportService.java
 package com.firinyonetim.backend.service;
 
+import com.firinyonetim.backend.dto.report.ProductStockSummaryDto;
+import com.firinyonetim.backend.dto.report.RouteStockSummaryDto;
+import com.firinyonetim.backend.dto.report.ShipmentStockSummaryDto;
+import com.firinyonetim.backend.dto.report.StockSummaryResponseDto;
 import com.firinyonetim.backend.dto.route.*;
 import com.firinyonetim.backend.entity.*;
 import com.firinyonetim.backend.repository.RouteAssignmentRepository;
 import com.firinyonetim.backend.repository.ShipmentRepository;
 import com.firinyonetim.backend.repository.TransactionRepository;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -27,20 +34,17 @@ public class ReportService {
 
     @Transactional(readOnly = true)
     public DailyRouteLedgerResponseDto getDailyRouteLedger(Long routeId, LocalDate date) {
-        // 1. Rotadaki müşterileri ve o günkü sevkiyatları çek
         List<Customer> customersInRoute = routeAssignmentRepository.findByRouteIdOrderByDeliveryOrderAsc(routeId)
                 .stream().map(RouteAssignment::getCustomer).collect(Collectors.toList());
 
-        // DEĞİŞİKLİK BURADA: Hatalı metot adı düzeltildi.
         List<Shipment> shipments = shipmentRepository.findByRouteIdAndShipmentDateWithDetails(routeId, date);
 
         if (customersInRoute.isEmpty()) {
-            return new DailyRouteLedgerResponseDto(); // Boş rapor döndür
+            return new DailyRouteLedgerResponseDto();
         }
 
         List<Long> customerIds = customersInRoute.stream().map(Customer::getId).collect(Collectors.toList());
 
-        // 2. Müşterilerin gün başı bakiyelerini hesapla
         Map<Long, BigDecimal> currentBalances = customersInRoute.stream()
                 .collect(Collectors.toMap(Customer::getId, c -> Optional.ofNullable(c.getCurrentBalanceAmount()).orElse(BigDecimal.ZERO)));
 
@@ -58,8 +62,6 @@ public class ReportService {
             startOfDayBalances.put(id, currentBalance.subtract(todayChange));
         });
 
-
-        // ... (metodun geri kalanı aynı)
         DailyRouteLedgerResponseDto response = new DailyRouteLedgerResponseDto();
         response.setShipmentSequences(shipments.stream().map(Shipment::getSequenceNumber).collect(Collectors.toSet()));
 
@@ -73,6 +75,14 @@ public class ReportService {
 
             List<Transaction> customerTransactions = todaysApprovedTransactions.stream()
                     .filter(t -> t.getCustomer().getId().equals(customer.getId())).collect(Collectors.toList());
+
+            // YENİ: Toplam satış tutarını hesapla
+            BigDecimal totalSales = customerTransactions.stream()
+                    .flatMap(t -> t.getItems().stream())
+                    .filter(item -> item.getType() == ItemType.SATIS)
+                    .map(TransactionItem::getTotalPrice)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            row.setTotalSalesAmount(totalSales); // Hesaplanan değeri DTO'ya set et
 
             Map<Long, DailyRouteLedgerProductDto> productMovementsMap = new HashMap<>();
             for (Transaction t : customerTransactions) {
@@ -187,7 +197,143 @@ public class ReportService {
         return todaysChanges;
     }
 
-    private Map<Long, BigDecimal> calculateBalances(List<Customer> customers, List<Transaction> transactions) {
-        return new HashMap<>();
+    @Transactional(readOnly = true)
+    public StockSummaryResponseDto getStockSummary(LocalDate date, List<Long> routeIds, List<Long> driverIds) {
+        Specification<Shipment> spec = (root, query, cb) -> {
+            query.distinct(true);
+            root.fetch("items").fetch("product");
+            root.fetch("route");
+            root.fetch("driver");
+
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.equal(root.get("shipmentDate"), date));
+            if (!CollectionUtils.isEmpty(routeIds)) {
+                predicates.add(root.get("route").get("id").in(routeIds));
+            }
+            if (!CollectionUtils.isEmpty(driverIds)) {
+                predicates.add(root.get("driver").get("id").in(driverIds));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        List<Shipment> shipments = shipmentRepository.findAll(spec);
+        if (shipments.isEmpty()) {
+            return new StockSummaryResponseDto();
+        }
+
+        List<Long> shipmentIds = shipments.stream().map(Shipment::getId).collect(Collectors.toList());
+        List<Transaction> transactions = transactionRepository.findAll(
+                (root, query, cb) -> root.get("shipment").get("id").in(shipmentIds)
+        );
+
+        Map<Long, List<Transaction>> transactionsByShipmentId = transactions.stream()
+                .filter(t -> t.getStatus() == TransactionStatus.APPROVED)
+                .collect(Collectors.groupingBy(t -> t.getShipment().getId()));
+
+        StockSummaryResponseDto response = new StockSummaryResponseDto();
+        Map<Long, ProductStockSummaryDto> cumulativeProductMap = new HashMap<>();
+        Map<Long, RouteStockSummaryDto> routeSummaryMap = new HashMap<>();
+
+        for (Shipment shipment : shipments) {
+            Route route = shipment.getRoute();
+            RouteStockSummaryDto routeSummary = routeSummaryMap.computeIfAbsent(route.getId(), k -> {
+                RouteStockSummaryDto dto = new RouteStockSummaryDto();
+                dto.setRouteId(route.getId());
+                dto.setRouteName(route.getName());
+                return dto;
+            });
+
+            ShipmentStockSummaryDto shipmentSummaryDto = new ShipmentStockSummaryDto();
+            shipmentSummaryDto.setShipmentId(shipment.getId());
+            shipmentSummaryDto.setSequenceNumber(shipment.getSequenceNumber());
+            shipmentSummaryDto.setDriverName(shipment.getDriver().getName() + " " + shipment.getDriver().getSurname());
+            shipmentSummaryDto.setStatus(shipment.getStatus());
+
+            Map<Long, ProductStockSummaryDto> shipmentProductMap = new HashMap<>();
+            List<Transaction> shipmentTransactions = transactionsByShipmentId.getOrDefault(shipment.getId(), Collections.emptyList());
+
+            for (ShipmentItem item : shipment.getItems()) {
+                Product product = item.getProduct();
+                ProductStockSummaryDto summary = getOrCreateSummary(product, shipmentProductMap);
+                summary.setTotalUnitsTaken(summary.getTotalUnitsTaken() + item.getTotalUnitsTaken());
+                if (shipment.getStatus() == ShipmentStatus.COMPLETED) {
+                    int returnedToBakery = (item.getTotalDailyUnitsReturned() != null ? item.getTotalDailyUnitsReturned() : 0)
+                            + (item.getTotalReturnUnitsTaken() != null ? item.getTotalReturnUnitsTaken() : 0);
+                    summary.setTotalUnitsReturnedToBakery(summary.getTotalUnitsReturnedToBakery() + returnedToBakery);
+                }
+            }
+
+            for (Transaction transaction : shipmentTransactions) {
+                for (TransactionItem item : transaction.getItems()) {
+                    Product product = item.getProduct();
+                    ProductStockSummaryDto summary = getOrCreateSummary(product, shipmentProductMap);
+                    if (item.getType() == ItemType.SATIS) {
+                        summary.setTotalUnitsSold(summary.getTotalUnitsSold() + item.getQuantity());
+                    } else {
+                        summary.setTotalUnitsReturnedByCustomer(summary.getTotalUnitsReturnedByCustomer() + item.getQuantity());
+                    }
+                }
+            }
+
+            for (ProductStockSummaryDto shipmentProductSummary : shipmentProductMap.values()) {
+                Product product = new Product();
+                product.setId(shipmentProductSummary.getProductId());
+                product.setName(shipmentProductSummary.getProductName());
+
+                ProductStockSummaryDto cumulativeSummary = getOrCreateSummary(product, cumulativeProductMap);
+                ProductStockSummaryDto routeCumulativeSummary = getOrCreateSummary(product, routeSummary.getCumulativeProductSummaries());
+
+                cumulativeSummary.setTotalUnitsTaken(cumulativeSummary.getTotalUnitsTaken() + shipmentProductSummary.getTotalUnitsTaken());
+                cumulativeSummary.setTotalUnitsSold(cumulativeSummary.getTotalUnitsSold() + shipmentProductSummary.getTotalUnitsSold());
+                cumulativeSummary.setTotalUnitsReturnedByCustomer(cumulativeSummary.getTotalUnitsReturnedByCustomer() + shipmentProductSummary.getTotalUnitsReturnedByCustomer());
+                cumulativeSummary.setTotalUnitsReturnedToBakery(cumulativeSummary.getTotalUnitsReturnedToBakery() + shipmentProductSummary.getTotalUnitsReturnedToBakery());
+
+                routeCumulativeSummary.setTotalUnitsTaken(routeCumulativeSummary.getTotalUnitsTaken() + shipmentProductSummary.getTotalUnitsTaken());
+                routeCumulativeSummary.setTotalUnitsSold(routeCumulativeSummary.getTotalUnitsSold() + shipmentProductSummary.getTotalUnitsSold());
+                routeCumulativeSummary.setTotalUnitsReturnedByCustomer(routeCumulativeSummary.getTotalUnitsReturnedByCustomer() + shipmentProductSummary.getTotalUnitsReturnedByCustomer());
+                routeCumulativeSummary.setTotalUnitsReturnedToBakery(routeCumulativeSummary.getTotalUnitsReturnedToBakery() + shipmentProductSummary.getTotalUnitsReturnedToBakery());
+            }
+
+            shipmentSummaryDto.getProductSummaries().addAll(shipmentProductMap.values());
+            routeSummary.getShipmentSummaries().add(shipmentSummaryDto);
+        }
+
+        response.getCumulativeSummary().addAll(cumulativeProductMap.values());
+        response.getRouteBasedSummary().addAll(routeSummaryMap.values());
+
+        response.getCumulativeSummary().forEach(this::calculateVariance);
+        response.getRouteBasedSummary().forEach(rs -> {
+            rs.getCumulativeProductSummaries().forEach(this::calculateVariance);
+            rs.getShipmentSummaries().forEach(ss -> ss.getProductSummaries().forEach(this::calculateVariance));
+        });
+
+        return response;
+    }
+
+    private ProductStockSummaryDto createNewSummary(Product product) {
+        ProductStockSummaryDto dto = new ProductStockSummaryDto();
+        dto.setProductId(product.getId());
+        dto.setProductName(product.getName());
+        return dto;
+    }
+
+    private ProductStockSummaryDto getOrCreateSummary(Product product, Map<Long, ProductStockSummaryDto> map) {
+        return map.computeIfAbsent(product.getId(), k -> createNewSummary(product));
+    }
+
+    private ProductStockSummaryDto getOrCreateSummary(Product product, List<ProductStockSummaryDto> list) {
+        return list.stream()
+                .filter(s -> s.getProductId().equals(product.getId()))
+                .findFirst()
+                .orElseGet(() -> {
+                    ProductStockSummaryDto newDto = createNewSummary(product);
+                    list.add(newDto);
+                    return newDto;
+                });
+    }
+
+    private void calculateVariance(ProductStockSummaryDto summary) {
+        int expectedReturn = summary.getTotalUnitsTaken() - summary.getTotalUnitsSold() + summary.getTotalUnitsReturnedByCustomer();
+        summary.setVariance(summary.getTotalUnitsReturnedToBakery() - expectedReturn);
     }
 }

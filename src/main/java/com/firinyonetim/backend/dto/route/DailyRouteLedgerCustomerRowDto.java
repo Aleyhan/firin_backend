@@ -15,4 +15,5 @@ public class DailyRouteLedgerCustomerRowDto {
     private BigDecimal cashPayment;
     private BigDecimal cardPayment;
     private List<DailyRouteLedgerProductDto> productMovements;
+    private BigDecimal totalSalesAmount; // YENİ ALAN
 }
