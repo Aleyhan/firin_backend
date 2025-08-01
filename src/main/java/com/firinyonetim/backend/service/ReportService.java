@@ -76,13 +76,12 @@ public class ReportService {
             List<Transaction> customerTransactions = todaysApprovedTransactions.stream()
                     .filter(t -> t.getCustomer().getId().equals(customer.getId())).collect(Collectors.toList());
 
-            // YENİ: Toplam satış tutarını hesapla
             BigDecimal totalSales = customerTransactions.stream()
                     .flatMap(t -> t.getItems().stream())
                     .filter(item -> item.getType() == ItemType.SATIS)
                     .map(TransactionItem::getTotalPrice)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            row.setTotalSalesAmount(totalSales); // Hesaplanan değeri DTO'ya set et
+            row.setTotalSalesAmount(totalSales);
 
             Map<Long, DailyRouteLedgerProductDto> productMovementsMap = new HashMap<>();
             for (Transaction t : customerTransactions) {
@@ -93,13 +92,14 @@ public class ReportService {
                         DailyRouteLedgerProductDto newDto = new DailyRouteLedgerProductDto();
                         newDto.setProductId(item.getProduct().getId());
                         newDto.setProductName(item.getProduct().getName());
-                        newDto.setSalesByShipment(new HashMap<>());
                         return newDto;
                     });
 
                     if (item.getType() == ItemType.SATIS) {
                         pDto.getSalesByShipment().merge(t.getShipment().getSequenceNumber(), item.getQuantity(), Integer::sum);
                     } else {
+                        // DEĞİŞİKLİK: İadeleri sefer bazında topla
+                        pDto.getReturnsByShipment().merge(t.getShipment().getSequenceNumber(), item.getQuantity(), Integer::sum);
                         pDto.setTotalReturns(pDto.getTotalReturns() + item.getQuantity());
                     }
                 }
@@ -132,10 +132,6 @@ public class ReportService {
                     DailyRouteLedgerFooterDto footerDto = new DailyRouteLedgerFooterDto();
                     footerDto.setProductId(item.getProduct().getId());
                     footerDto.setProductName(item.getProduct().getName());
-                    footerDto.setUnitsTakenByShipment(new HashMap<>());
-                    footerDto.setUnitsReturnedByShipment(new HashMap<>());
-                    footerDto.setUnitsSoldByShipment(new HashMap<>());
-                    footerDto.setVarianceByShipment(new HashMap<>());
                     return footerDto;
                 });
             }
@@ -158,6 +154,9 @@ public class ReportService {
                     footerDto.setTotalReturnedByCustomer(footerDto.getTotalReturnedByCustomer() + pMovement.getTotalReturns());
                     pMovement.getSalesByShipment().forEach((seq, qty) ->
                             footerDto.getUnitsSoldByShipment().merge(seq, qty, Integer::sum));
+                    // DEĞİŞİKLİK: Müşteri iadelerini sefer bazında topla
+                    pMovement.getReturnsByShipment().forEach((seq, qty) ->
+                            footerDto.getUnitsReturnedByCustomerByShipment().merge(seq, qty, Integer::sum));
                 }
             }
         }
@@ -182,6 +181,7 @@ public class ReportService {
         return response;
     }
 
+    // ... (metodun geri kalanı aynı)
     private Map<Long, BigDecimal> calculateTodaysBalanceChanges(List<Transaction> todaysTransactions) {
         Map<Long, BigDecimal> todaysChanges = new HashMap<>();
         for (Transaction t : todaysTransactions) {
