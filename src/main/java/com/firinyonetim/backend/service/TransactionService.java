@@ -42,7 +42,7 @@ public class TransactionService {
     private final ProductRepository productRepository;
     private final TransactionMapper transactionMapper;
     private final RouteRepository routeRepository;
-    private final ShipmentRepository shipmentRepository; // YENİ REPOSITORY
+    private final ShipmentRepository shipmentRepository;
     private final CustomerProductAssignmentRepository customerProductAssignmentRepository;
     private final RouteAssignmentRepository routeAssignmentRepository;
 
@@ -62,7 +62,6 @@ public class TransactionService {
         return transactionMapper.toTransactionResponse(savedTransaction);
     }
 
-    // BU METOT GÜNCELLENDİ
     private Transaction createTransactionInternal(TransactionCreateRequest request, boolean updateBalance) {
         Customer customer = customerRepository.findById(request.getCustomerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + request.getCustomerId()));
@@ -73,14 +72,12 @@ public class TransactionService {
         transaction.setCreatedBy(currentUser);
         transaction.setNotes(request.getNotes());
 
-        // Sevkiyat ID'si varsa, sevkiyatı bul ve bağla. Rotayı da sevkiyattan al.
         if (request.getShipmentId() != null) {
             Shipment shipment = shipmentRepository.findById(request.getShipmentId())
                     .orElseThrow(() -> new ResourceNotFoundException("Shipment not found with id: " + request.getShipmentId()));
             transaction.setShipment(shipment);
             transaction.setRoute(shipment.getRoute());
         }
-        // Sevkiyat ID'si yoksa ama Rota ID'si varsa, rotayı bağla (ofis işlemi).
         else if (request.getRouteId() != null) {
             Route route = routeRepository.findById(request.getRouteId())
                     .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + request.getRouteId()));
@@ -93,7 +90,6 @@ public class TransactionService {
             transaction.setTransactionDate(LocalDateTime.now());
         }
 
-        // Sevkiyat içi sıra numarasını sadece sevkiyata bağlı işlemlerde hesapla
         if (transaction.getShipment() != null) {
             long sequence = transactionRepository.countByShipmentId(transaction.getShipment().getId()) + 1;
             transaction.setSequenceInShipment((int) sequence);
@@ -101,7 +97,6 @@ public class TransactionService {
 
         BigDecimal balanceChange = BigDecimal.ZERO;
 
-        // ... (metodun geri kalanı - ürün ve ödeme işleme - aynı)
         if (request.getItems() != null && !request.getItems().isEmpty()) {
             Map<Long, CustomerProductAssignment> assignmentsMap = customerProductAssignmentRepository
                     .findByCustomerId(customer.getId()).stream()
@@ -162,7 +157,6 @@ public class TransactionService {
         return transaction;
     }
 
-    // ... (servisin geri kalanı aynı)
     @Transactional
     public TransactionResponse approveTransaction(Long transactionId) {
         Transaction transaction = transactionRepository.findByIdWithDetails(transactionId)
@@ -182,6 +176,31 @@ public class TransactionService {
 
         Transaction savedTransaction = transactionRepository.save(transaction);
         return transactionMapper.toTransactionResponse(savedTransaction);
+    }
+
+    // YENİ METOT
+    @Transactional
+    public List<TransactionResponse> approveMultipleTransactions(List<Long> transactionIds) {
+        List<Transaction> transactionsToApprove = transactionRepository.findAllById(transactionIds);
+        List<TransactionResponse> approvedResponses = new ArrayList<>();
+
+        for (Transaction transaction : transactionsToApprove) {
+            if (transaction.getStatus() == TransactionStatus.PENDING) {
+                transaction.setStatus(TransactionStatus.APPROVED);
+                transaction.setRejectionReason(null);
+
+                BigDecimal balanceChange = calculateBalanceChange(transaction);
+                Customer customer = transaction.getCustomer();
+                customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().add(balanceChange));
+                // customerRepository.save(customer) is not strictly necessary here
+                // as the customer object is managed by Hibernate and will be saved
+                // at the end of the transaction.
+
+                Transaction savedTransaction = transactionRepository.save(transaction);
+                approvedResponses.add(transactionMapper.toTransactionResponse(savedTransaction));
+            }
+        }
+        return approvedResponses;
     }
 
     @Transactional
@@ -376,7 +395,6 @@ public class TransactionService {
         }
     }
 
-    // METOT GÜNCELLENDİ
     @Transactional(readOnly = true)
     public PagedResponseDto<TransactionResponse> searchTransactions(LocalDate startDate, LocalDate endDate, Long customerId, Long routeId, TransactionStatus status, Pageable pageable) {
         Specification<Transaction> spec = Specification.where(null);
@@ -393,12 +411,11 @@ public class TransactionService {
             spec = spec.and((root, query, criteriaBuilder) ->
                     criteriaBuilder.equal(root.get("customer").get("id"), customerId));
         }
-        // ROTA FİLTRELEME MANTIĞI GÜNCELLENDİ
         if (routeId != null) {
-            if (routeId == -1) { // -1 özel değeri "Rotasız" anlamına gelir
+            if (routeId == -1) {
                 spec = spec.and((root, query, criteriaBuilder) ->
                         criteriaBuilder.isNull(root.get("route")));
-            } else { // Pozitif bir ID ise normal filtreleme yapılır
+            } else {
                 spec = spec.and((root, query, criteriaBuilder) ->
                         criteriaBuilder.equal(root.get("route").get("id"), routeId));
             }

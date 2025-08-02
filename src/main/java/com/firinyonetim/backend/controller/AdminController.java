@@ -5,7 +5,7 @@ import com.firinyonetim.backend.dto.PagedResponseDto;
 import com.firinyonetim.backend.dto.shipment.request.ShipmentUpdateRequest;
 import com.firinyonetim.backend.dto.shipment.response.ShipmentReportResponse;
 import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
-import com.firinyonetim.backend.entity.ShipmentStatus; // YENİ
+import com.firinyonetim.backend.entity.ShipmentStatus;
 import com.firinyonetim.backend.service.RouteService;
 import com.firinyonetim.backend.service.ShipmentService;
 import com.firinyonetim.backend.service.TransactionService;
@@ -31,7 +31,6 @@ public class AdminController {
     private final RouteService routeService;
     private final ShipmentService shipmentService;
 
-    // ... (diğer metotlar aynı)
     @GetMapping("/pending-transactions")
     public ResponseEntity<List<TransactionResponse>> getPendingTransactions() {
         return ResponseEntity.ok(transactionService.getPendingTransactions());
@@ -40,6 +39,12 @@ public class AdminController {
     @PostMapping("/transactions/{transactionId}/approve")
     public ResponseEntity<TransactionResponse> approveTransaction(@PathVariable Long transactionId) {
         return ResponseEntity.ok(transactionService.approveTransaction(transactionId));
+    }
+
+    // YENİ ENDPOINT
+    @PostMapping("/transactions/approve-batch")
+    public ResponseEntity<List<TransactionResponse>> approveMultipleTransactions(@RequestBody List<Long> transactionIds) {
+        return ResponseEntity.ok(transactionService.approveMultipleTransactions(transactionIds));
     }
 
     @PostMapping("/transactions/{transactionId}/reject")
@@ -57,14 +62,13 @@ public class AdminController {
         return ResponseEntity.ok().build();
     }
 
-    // ENDPOINT İMZASI GÜNCELLENDİ
     @GetMapping("/shipments")
     public ResponseEntity<PagedResponseDto<ShipmentReportResponse>> searchShipments(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(required = false) Long routeId,
             @RequestParam(required = false) Long driverId,
-            @RequestParam(required = false) ShipmentStatus status, // YENİ
+            @RequestParam(required = false) ShipmentStatus status,
             Pageable pageable) {
         return ResponseEntity.ok(shipmentService.searchShipments(startDate, endDate, routeId, driverId, status, pageable));
     }
@@ -74,7 +78,6 @@ public class AdminController {
         return ResponseEntity.ok(shipmentService.getShipmentReportById(id));
     }
 
-    // YENİ ENDPOINT
     @PutMapping("/shipments/{id}")
     public ResponseEntity<ShipmentReportResponse> updateShipment(
             @PathVariable Long id,
