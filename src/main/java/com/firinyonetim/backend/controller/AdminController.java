@@ -85,4 +85,12 @@ public class AdminController {
         return ResponseEntity.ok(shipmentService.updateShipment(id, request));
     }
 
+    // YENİ ENDPOINT
+    @PatchMapping("/shipments/{id}/complete")
+    public ResponseEntity<Void> completeShipment(@PathVariable Long id) {
+        shipmentService.completeShipmentAsAdmin(id);
+        return ResponseEntity.ok().build();
+    }
+
+
 }

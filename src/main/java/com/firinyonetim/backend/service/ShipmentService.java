@@ -340,4 +340,23 @@ public class ShipmentService {
         Shipment savedShipment = shipmentRepository.save(shipment);
         return getShipmentReportById(savedShipment.getId());
     }
+
+    // YENİ METOT
+    @Transactional
+    public void completeShipmentAsAdmin(Long shipmentId) {
+        Shipment shipment = shipmentRepository.findById(shipmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Shipment not found with id: " + shipmentId));
+
+        if (shipment.getStatus() == ShipmentStatus.COMPLETED) {
+            throw new IllegalStateException("Bu sevkiyat zaten tamamlanmış.");
+        }
+
+        // Admin tarafından bitirildiği için not ekleyebiliriz.
+        String originalNotes = shipment.getEndNotes() == null ? "" : shipment.getEndNotes() + "\n";
+        shipment.setEndNotes(originalNotes + "Yönetici tarafından sonlandırıldı - " + LocalDate.now());
+        shipment.setStatus(ShipmentStatus.COMPLETED);
+
+        shipmentRepository.save(shipment);
+    }
+
 }
