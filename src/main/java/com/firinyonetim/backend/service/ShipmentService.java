@@ -16,12 +16,12 @@ import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.mapper.ShipmentMapper;
 import com.firinyonetim.backend.mapper.ShipmentReportMapper;
 import com.firinyonetim.backend.repository.*;
-import jakarta.persistence.criteria.Predicate; // YENİ
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort; // YENİ
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -33,7 +33,7 @@ import com.firinyonetim.backend.dto.shipment.request.ShipmentUpdateRequest;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator; // YENİ
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,8 +52,20 @@ public class ShipmentService {
     private final ShipmentMapper shipmentMapper;
     private final ShipmentReportMapper shipmentReportMapper;
 
+    // YENİ METOT
+    @Transactional(readOnly = true)
+    public List<Long> getProcessedCustomerIdsForShipment(Long shipmentId) {
+        // Sevkiyatın mevcut kullanıcıya ait olup olmadığını kontrol et (güvenlik için)
+        User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Shipment shipment = shipmentRepository.findById(shipmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Shipment not found with id: " + shipmentId));
 
-    // ... createShipment, getTodaysShipmentForRoute, endShipment metotları aynı ...
+        if (!shipment.getDriver().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("Bu sevkiyat bilgilerine erişim yetkiniz yok.");
+        }
+        return transactionRepository.findProcessedCustomerIdsByShipmentId(shipmentId);
+    }
+
     @Transactional
     public void createShipment(ShipmentCreateRequest request) {
         User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -148,7 +160,6 @@ public class ShipmentService {
         shipmentRepository.save(shipment);
     }
 
-    // METOT TAMAMEN YENİLENDİ
     @Transactional(readOnly = true)
     public PagedResponseDto<ShipmentReportResponse> searchShipments(LocalDate startDate, LocalDate endDate, Long routeId, Long driverId, ShipmentStatus status, Pageable pageable) {
         Specification<Shipment> spec = (root, query, cb) -> {
@@ -180,7 +191,6 @@ public class ShipmentService {
 
         List<Shipment> shipmentsWithDetails = shipmentRepository.findByIdsWithDetails(ids);
 
-        // Orijinal sıralamayı korumak için Map kullan ve sırala
         Map<Long, Shipment> detailsMap = shipmentsWithDetails.stream()
                 .collect(Collectors.toMap(Shipment::getId, Function.identity()));
 
@@ -286,7 +296,6 @@ public class ShipmentService {
         return result;
     }
 
-    // YENİ METOT
     @Transactional
     public ShipmentReportResponse updateShipment(Long shipmentId, ShipmentUpdateRequest request) {
         Shipment shipment = shipmentRepository.findByIdWithDetails(shipmentId)
@@ -306,12 +315,10 @@ public class ShipmentService {
                     throw new IllegalStateException("Ürün '" + product.getName() + "' için kasa adedi tanımlanmamış.");
                 }
 
-                // Başlangıç stoklarını güncelle ve toplamı yeniden hesapla
                 item.setCratesTaken(itemUpdateRequest.getCratesTaken());
                 item.setUnitsTaken(itemUpdateRequest.getUnitsTaken());
                 item.setTotalUnitsTaken((itemUpdateRequest.getCratesTaken() * product.getUnitsPerCrate()) + itemUpdateRequest.getUnitsTaken());
 
-                // Bitiş stoklarını güncelle ve toplamları yeniden hesapla
                 item.setDailyCratesReturned(itemUpdateRequest.getDailyCratesReturned());
                 item.setDailyUnitsReturned(itemUpdateRequest.getDailyUnitsReturned());
                 if (itemUpdateRequest.getDailyCratesReturned() != null && itemUpdateRequest.getDailyUnitsReturned() != null) {
@@ -331,9 +338,6 @@ public class ShipmentService {
         }
 
         Shipment savedShipment = shipmentRepository.save(shipment);
-        // Güncellenmiş ve yeniden hesaplanmış veriyi döndür
         return getShipmentReportById(savedShipment.getId());
     }
-
-
 }

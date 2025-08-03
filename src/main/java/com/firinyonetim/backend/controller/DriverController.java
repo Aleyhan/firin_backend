@@ -2,7 +2,7 @@
 package com.firinyonetim.backend.controller;
 
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
-import com.firinyonetim.backend.dto.driver.response.DriverCustomerResponse; // YENİ
+import com.firinyonetim.backend.dto.driver.response.DriverCustomerResponse;
 import com.firinyonetim.backend.dto.driver.response.DriverDailyCustomerSummaryDto;
 import com.firinyonetim.backend.dto.route.response.RouteResponse;
 import com.firinyonetim.backend.dto.shipment.request.ShipmentCreateRequest;
@@ -40,7 +40,6 @@ public class DriverController {
         return ResponseEntity.ok(routeService.getDriverRoutes(driver.getId()));
     }
 
-    // DEĞİŞİKLİK BURADA
     @GetMapping("/routes/{routeId}/customers")
     public ResponseEntity<List<DriverCustomerResponse>> getCustomersForRoute(@PathVariable Long routeId) {
         return ResponseEntity.ok(routeService.getCustomersByRouteForDriver(routeId));
@@ -89,5 +88,11 @@ public class DriverController {
             @Valid @RequestBody ShipmentEndRequest request) {
         shipmentService.endShipment(shipmentId, request);
         return ResponseEntity.ok().build();
+    }
+
+    // YENİ ENDPOINT
+    @GetMapping("/shipments/{shipmentId}/processed-customers")
+    public ResponseEntity<List<Long>> getProcessedCustomerIds(@PathVariable Long shipmentId) {
+        return ResponseEntity.ok(shipmentService.getProcessedCustomerIdsForShipment(shipmentId));
     }
 }

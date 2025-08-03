@@ -15,7 +15,6 @@ import java.util.Optional;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long>, JpaSpecificationExecutor<Transaction> {
 
-    // ... (diğer metotlar aynı)
     @Query("SELECT DISTINCT t FROM Transaction t " +
             "LEFT JOIN FETCH t.items " +
             "LEFT JOIN FETCH t.payments " +
@@ -30,7 +29,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             "LEFT JOIN FETCH t.customer " +
             "LEFT JOIN FETCH t.createdBy " +
             "LEFT JOIN FETCH t.route " +
-            "LEFT JOIN FETCH t.shipment " + // shipment'ı da fetch et
+            "LEFT JOIN FETCH t.shipment " +
             "WHERE t.customer.id = :customerId " +
             "ORDER BY t.transactionDate ASC")
     List<Transaction> findByCustomerIdOrderByTransactionDateAsc(@Param("customerId") Long customerId);
@@ -39,7 +38,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
     @Query("SELECT t FROM Transaction t " +
             "LEFT JOIN FETCH t.items " +
             "LEFT JOIN FETCH t.payments " +
-            "LEFT JOIN FETCH t.shipment " + // shipment'ı da fetch et
+            "LEFT JOIN FETCH t.shipment " +
             "WHERE t.id = :transactionId")
     Optional<Transaction> findByIdWithDetails(Long transactionId);
 
@@ -47,7 +46,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             "JOIN FETCH t.customer " +
             "JOIN FETCH t.createdBy " +
             "LEFT JOIN FETCH t.route " +
-            "LEFT JOIN FETCH t.shipment " + // shipment'ı da fetch et
+            "LEFT JOIN FETCH t.shipment " +
             "LEFT JOIN FETCH t.items ti " +
             "LEFT JOIN FETCH ti.product " +
             "LEFT JOIN FETCH t.payments " +
@@ -61,7 +60,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             "JOIN FETCH t.customer " +
             "JOIN FETCH t.createdBy " +
             "LEFT JOIN FETCH t.route " +
-            "LEFT JOIN FETCH t.shipment " + // shipment'ı da fetch et
+            "LEFT JOIN FETCH t.shipment " +
             "LEFT JOIN FETCH t.items ti " +
             "LEFT JOIN FETCH ti.product " +
             "LEFT JOIN FETCH t.payments " +
@@ -86,10 +85,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
     @Query("SELECT t FROM Transaction t JOIN FETCH t.items i JOIN FETCH i.product WHERE t.shipment.id = :shipmentId")
     List<Transaction> findByShipmentId(Long shipmentId);
 
-    // YENİ METOT
     long countByShipmentId(Long shipmentId);
 
-    // YENİ METOT: Belirli bir tarihten önceki tüm onaylanmış işlemleri getirir.
     @Query("SELECT t FROM Transaction t " +
             "LEFT JOIN FETCH t.items " +
             "LEFT JOIN FETCH t.payments " +
@@ -98,5 +95,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             @Param("customerIds") List<Long> customerIds,
             @Param("date") LocalDateTime date
     );
+
+    // YENİ METOT
+    @Query("SELECT DISTINCT t.customer.id FROM Transaction t WHERE t.shipment.id = :shipmentId")
+    List<Long> findProcessedCustomerIdsByShipmentId(@Param("shipmentId") Long shipmentId);
 
 }
