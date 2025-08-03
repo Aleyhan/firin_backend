@@ -38,6 +38,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set; // YENİ IMPORT
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -52,10 +53,88 @@ public class ShipmentService {
     private final ShipmentMapper shipmentMapper;
     private final ShipmentReportMapper shipmentReportMapper;
 
-    // YENİ METOT
+    // --- updateShipment METODU TAMAMEN GÜNCELLENDİ ---
+    @Transactional
+    public ShipmentReportResponse updateShipment(Long shipmentId, ShipmentUpdateRequest request) {
+        Shipment shipment = shipmentRepository.findByIdWithDetails(shipmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Shipment not found with id: " + shipmentId));
+
+        shipment.setStartNotes(request.getStartNotes());
+        shipment.setEndNotes(request.getEndNotes());
+
+        Map<Long, ShipmentItem> existingItemsMap = shipment.getItems().stream()
+                .collect(Collectors.toMap(item -> item.getProduct().getId(), Function.identity()));
+
+        Set<Long> requestProductIds = request.getItems().stream()
+                .map(ShipmentItemUpdateRequest::getProductId)
+                .collect(Collectors.toSet());
+
+        // 1. Silinecek ürünleri kaldır
+        shipment.getItems().removeIf(item -> !requestProductIds.contains(item.getProduct().getId()));
+
+        // 2. Mevcut ürünleri güncelle veya yeni ürünleri ekle
+        for (ShipmentItemUpdateRequest itemUpdateRequest : request.getItems()) {
+            Product product = productRepository.findById(itemUpdateRequest.getProductId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + itemUpdateRequest.getProductId()));
+
+            if (product.getUnitsPerCrate() == null || product.getUnitsPerCrate() <= 0) {
+                throw new IllegalStateException("Ürün '" + product.getName() + "' için kasa adedi tanımlanmamış.");
+            }
+
+            ShipmentItem item = existingItemsMap.get(itemUpdateRequest.getProductId());
+
+            if (item == null) { // Ürün sevkiyatta yok, yeni ekle
+                item = new ShipmentItem();
+                item.setShipment(shipment);
+                item.setProduct(product);
+                shipment.getItems().add(item);
+            }
+
+            // Miktarları ve toplamları güncelle/ayarla
+            item.setCratesTaken(itemUpdateRequest.getCratesTaken());
+            item.setUnitsTaken(itemUpdateRequest.getUnitsTaken());
+            item.setTotalUnitsTaken((itemUpdateRequest.getCratesTaken() * product.getUnitsPerCrate()) + itemUpdateRequest.getUnitsTaken());
+
+            item.setDailyCratesReturned(itemUpdateRequest.getDailyCratesReturned());
+            item.setDailyUnitsReturned(itemUpdateRequest.getDailyUnitsReturned());
+            if (itemUpdateRequest.getDailyCratesReturned() != null && itemUpdateRequest.getDailyUnitsReturned() != null) {
+                item.setTotalDailyUnitsReturned((itemUpdateRequest.getDailyCratesReturned() * product.getUnitsPerCrate()) + itemUpdateRequest.getDailyUnitsReturned());
+            } else {
+                item.setTotalDailyUnitsReturned(null);
+            }
+
+            item.setReturnCratesTaken(itemUpdateRequest.getReturnCratesTaken());
+            item.setReturnUnitsTaken(itemUpdateRequest.getReturnUnitsTaken());
+            if (itemUpdateRequest.getReturnCratesTaken() != null && itemUpdateRequest.getReturnUnitsTaken() != null) {
+                item.setTotalReturnUnitsTaken((itemUpdateRequest.getReturnCratesTaken() * product.getUnitsPerCrate()) + itemUpdateRequest.getReturnUnitsTaken());
+            } else {
+                item.setTotalReturnUnitsTaken(null);
+            }
+        }
+
+        Shipment savedShipment = shipmentRepository.save(shipment);
+        return getShipmentReportById(savedShipment.getId());
+    }
+
+    // ... Diğer tüm metotlar aynı kalacak ...
+    @Transactional
+    public void completeShipmentAsAdmin(Long shipmentId) {
+        Shipment shipment = shipmentRepository.findById(shipmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Shipment not found with id: " + shipmentId));
+
+        if (shipment.getStatus() == ShipmentStatus.COMPLETED) {
+            throw new IllegalStateException("Bu sevkiyat zaten tamamlanmış.");
+        }
+
+        String originalNotes = shipment.getEndNotes() == null ? "" : shipment.getEndNotes() + "\n";
+        shipment.setEndNotes(originalNotes + "Yönetici tarafından sonlandırıldı - " + LocalDate.now());
+        shipment.setStatus(ShipmentStatus.COMPLETED);
+
+        shipmentRepository.save(shipment);
+    }
+
     @Transactional(readOnly = true)
     public List<Long> getProcessedCustomerIdsForShipment(Long shipmentId) {
-        // Sevkiyatın mevcut kullanıcıya ait olup olmadığını kontrol et (güvenlik için)
         User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Shipment shipment = shipmentRepository.findById(shipmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Shipment not found with id: " + shipmentId));
@@ -295,68 +374,4 @@ public class ShipmentService {
 
         return result;
     }
-
-    @Transactional
-    public ShipmentReportResponse updateShipment(Long shipmentId, ShipmentUpdateRequest request) {
-        Shipment shipment = shipmentRepository.findByIdWithDetails(shipmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Shipment not found with id: " + shipmentId));
-
-        shipment.setStartNotes(request.getStartNotes());
-        shipment.setEndNotes(request.getEndNotes());
-
-        Map<Long, ShipmentItem> shipmentItemMap = shipment.getItems().stream()
-                .collect(Collectors.toMap(item -> item.getProduct().getId(), Function.identity()));
-
-        for (ShipmentItemUpdateRequest itemUpdateRequest : request.getItems()) {
-            ShipmentItem item = shipmentItemMap.get(itemUpdateRequest.getProductId());
-            if (item != null) {
-                Product product = item.getProduct();
-                if (product.getUnitsPerCrate() == null || product.getUnitsPerCrate() <= 0) {
-                    throw new IllegalStateException("Ürün '" + product.getName() + "' için kasa adedi tanımlanmamış.");
-                }
-
-                item.setCratesTaken(itemUpdateRequest.getCratesTaken());
-                item.setUnitsTaken(itemUpdateRequest.getUnitsTaken());
-                item.setTotalUnitsTaken((itemUpdateRequest.getCratesTaken() * product.getUnitsPerCrate()) + itemUpdateRequest.getUnitsTaken());
-
-                item.setDailyCratesReturned(itemUpdateRequest.getDailyCratesReturned());
-                item.setDailyUnitsReturned(itemUpdateRequest.getDailyUnitsReturned());
-                if (itemUpdateRequest.getDailyCratesReturned() != null && itemUpdateRequest.getDailyUnitsReturned() != null) {
-                    item.setTotalDailyUnitsReturned((itemUpdateRequest.getDailyCratesReturned() * product.getUnitsPerCrate()) + itemUpdateRequest.getDailyUnitsReturned());
-                } else {
-                    item.setTotalDailyUnitsReturned(null);
-                }
-
-                item.setReturnCratesTaken(itemUpdateRequest.getReturnCratesTaken());
-                item.setReturnUnitsTaken(itemUpdateRequest.getReturnUnitsTaken());
-                if (itemUpdateRequest.getReturnCratesTaken() != null && itemUpdateRequest.getReturnUnitsTaken() != null) {
-                    item.setTotalReturnUnitsTaken((itemUpdateRequest.getReturnCratesTaken() * product.getUnitsPerCrate()) + itemUpdateRequest.getReturnUnitsTaken());
-                } else {
-                    item.setTotalReturnUnitsTaken(null);
-                }
-            }
-        }
-
-        Shipment savedShipment = shipmentRepository.save(shipment);
-        return getShipmentReportById(savedShipment.getId());
-    }
-
-    // YENİ METOT
-    @Transactional
-    public void completeShipmentAsAdmin(Long shipmentId) {
-        Shipment shipment = shipmentRepository.findById(shipmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Shipment not found with id: " + shipmentId));
-
-        if (shipment.getStatus() == ShipmentStatus.COMPLETED) {
-            throw new IllegalStateException("Bu sevkiyat zaten tamamlanmış.");
-        }
-
-        // Admin tarafından bitirildiği için not ekleyebiliriz.
-        String originalNotes = shipment.getEndNotes() == null ? "" : shipment.getEndNotes() + "\n";
-        shipment.setEndNotes(originalNotes + "Yönetici tarafından sonlandırıldı - " + LocalDate.now());
-        shipment.setStatus(ShipmentStatus.COMPLETED);
-
-        shipmentRepository.save(shipment);
-    }
-
 }
