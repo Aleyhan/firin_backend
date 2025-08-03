@@ -65,6 +65,13 @@ public class TransactionService {
     private Transaction createTransactionInternal(TransactionCreateRequest request, boolean updateBalance) {
         Customer customer = customerRepository.findById(request.getCustomerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + request.getCustomerId()));
+
+        // --- YENİ KONTROL ---
+        if (!customer.isActive()) {
+            throw new IllegalStateException("Pasif durumdaki bir müşteri için işlem oluşturulamaz.");
+        }
+        // --- KONTROL SONU ---
+
         User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
 
         Transaction transaction = new Transaction();
@@ -157,6 +164,7 @@ public class TransactionService {
         return transaction;
     }
 
+    // ... Diğer tüm metotlar aynı kalacak ...
     @Transactional
     public TransactionResponse approveTransaction(Long transactionId) {
         Transaction transaction = transactionRepository.findByIdWithDetails(transactionId)
@@ -178,7 +186,6 @@ public class TransactionService {
         return transactionMapper.toTransactionResponse(savedTransaction);
     }
 
-    // YENİ METOT
     @Transactional
     public List<TransactionResponse> approveMultipleTransactions(List<Long> transactionIds) {
         List<Transaction> transactionsToApprove = transactionRepository.findAllById(transactionIds);
@@ -192,9 +199,6 @@ public class TransactionService {
                 BigDecimal balanceChange = calculateBalanceChange(transaction);
                 Customer customer = transaction.getCustomer();
                 customer.setCurrentBalanceAmount(customer.getCurrentBalanceAmount().add(balanceChange));
-                // customerRepository.save(customer) is not strictly necessary here
-                // as the customer object is managed by Hibernate and will be saved
-                // at the end of the transaction.
 
                 Transaction savedTransaction = transactionRepository.save(transaction);
                 approvedResponses.add(transactionMapper.toTransactionResponse(savedTransaction));

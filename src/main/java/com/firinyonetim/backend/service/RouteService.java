@@ -46,7 +46,7 @@ public class RouteService {
     private final TransactionRepository transactionRepository;
     private static final Logger logger = LoggerFactory.getLogger(RouteService.class);
 
-    // ... (diğer metotlar aynı kalacak)
+    // ... createRoute, getAllRoutes ve diğer metotlar aynı kalacak ...
     @Transactional
     public RouteResponse createRoute(RouteCreateRequest request) {
         if (routeRepository.existsByRouteCode(request.getRouteCode())) {
@@ -149,13 +149,21 @@ public class RouteService {
                 .collect(Collectors.toList());
     }
 
+    // --- GÜNCELLEME BURADA ---
     @Transactional(readOnly = true)
     public List<DriverCustomerResponse> getCustomersByRouteForDriver(Long routeId) {
-        return routeAssignmentRepository.findByRouteIdOrderByDeliveryOrderAsc(routeId).stream()
+        List<Customer> customers = routeAssignmentRepository.findByRouteIdOrderByDeliveryOrderAsc(routeId).stream()
                 .map(RouteAssignment::getCustomer)
+                .collect(Collectors.toList());
+
+        // Bu satır, Hibernate'i çalışma günleri koleksiyonunu veritabanından yüklemeye zorlar.
+        customers.forEach(c -> c.getWorkingDays().size());
+
+        return customers.stream()
                 .map(driverCustomerMapper::toDto)
                 .collect(Collectors.toList());
     }
+    // --- GÜNCELLEME SONU ---
 
     public List<RouteResponse> getRoutesByCustomer(Long customerId) {
         return routeAssignmentRepository.findByCustomerId(customerId).stream()
@@ -302,7 +310,6 @@ public class RouteService {
         LocalDateTime startOfNextDay = date.plusDays(1).atStartOfDay();
         List<Transaction> transactions = transactionRepository.findTransactionsBetween(startOfDay, startOfNextDay);
 
-        // Sadece onaylanmış işlemleri filtrele
         List<Transaction> approvedTransactions = transactions.stream()
                 .filter(t -> t.getStatus() == TransactionStatus.APPROVED)
                 .collect(Collectors.toList());

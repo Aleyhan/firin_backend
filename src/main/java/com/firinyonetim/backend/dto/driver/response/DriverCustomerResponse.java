@@ -11,5 +11,7 @@ public class DriverCustomerResponse {
     private String customerCode;
     private String name;
     private BigDecimal currentBalanceAmount;
+    private boolean isActive; // YENİ ALAN
     private List<DriverCustomerProductAssignmentDto> productAssignments;
+    private List<String> workingDays;
 }
