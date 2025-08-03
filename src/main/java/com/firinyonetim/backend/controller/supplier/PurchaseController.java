@@ -1,7 +1,6 @@
+// src/main/java/com/firinyonetim/backend/controller/supplier/PurchaseController.java
 package com.firinyonetim.backend.controller.supplier;
 
-import com.firinyonetim.backend.dto.supplier.request.PurchasePaymentRequest;
-import com.firinyonetim.backend.dto.supplier.response.PurchasePaymentResponse;
 import com.firinyonetim.backend.dto.supplier.request.PurchaseRequest;
 import com.firinyonetim.backend.dto.supplier.response.PurchaseResponse;
 import com.firinyonetim.backend.service.supplier.PurchaseService;
@@ -32,13 +31,19 @@ public class PurchaseController {
         return ResponseEntity.ok(purchaseService.getAllPurchases());
     }
 
-    @PostMapping("/payments")
-    public ResponseEntity<PurchasePaymentResponse> createPayment(@Valid @RequestBody PurchasePaymentRequest request) {
-        return new ResponseEntity<>(purchaseService.createPayment(request), HttpStatus.CREATED);
+    @GetMapping("/{id}")
+    public ResponseEntity<PurchaseResponse> getPurchaseById(@PathVariable Long id) {
+        return ResponseEntity.ok(purchaseService.getPurchaseById(id));
     }
 
-    @GetMapping("/payments")
-    public ResponseEntity<List<PurchasePaymentResponse>> getAllPayments() {
-        return ResponseEntity.ok(purchaseService.getAllPayments());
+    @PutMapping("/{id}")
+    public ResponseEntity<PurchaseResponse> updatePurchase(@PathVariable Long id, @Valid @RequestBody PurchaseRequest request) {
+        return ResponseEntity.ok(purchaseService.updatePurchase(id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deletePurchase(@PathVariable Long id) {
+        purchaseService.deletePurchase(id);
+        return ResponseEntity.noContent().build();
     }
 }
