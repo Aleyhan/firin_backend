@@ -9,10 +9,10 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface UserMapper {
 
-    // UserCreateRequest'ten User'a dönüşüm. Password'ü map'lemiyoruz, onu serviste hash'leyeceğiz.
     @Mapping(target = "password", ignore = true)
+    @Mapping(source = "tckn", target = "tckn") // DÖNÜŞÜM İÇİN EKLENDİ
     User toUser(UserCreateRequest request);
 
-    // User'dan UserResponse'a dönüşüm.
+    @Mapping(source = "tckn", target = "tckn") // DÖNÜŞÜM İÇİN EKLENDİ
     UserResponse toUserResponse(User user);
 }

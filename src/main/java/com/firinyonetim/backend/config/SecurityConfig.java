@@ -1,4 +1,3 @@
-// src/main/java/com/firinyonetim/backend/config/SecurityConfig.java
 package com.firinyonetim.backend.config;
 
 import com.firinyonetim.backend.security.JwtAuthenticationFilter;
@@ -48,6 +47,11 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**", "/api/health").permitAll()
+
+                        // DÜZELTME BURADA: Path pattern'i doğru formata getirildi.
+                        // Bu kural, /api/ewaybills/{bir-uuid-degeri}/pdf şeklindeki tüm GET isteklerine izin verir.
+                        .requestMatchers(HttpMethod.GET, "/api/ewaybills/{id}/pdf").authenticated()
+
                         // ŞOFÖR İÇİN ÖZEL KURALLAR
                         .requestMatchers("/api/driver/**").hasRole("SOFOR")
                         .requestMatchers(HttpMethod.GET, "/api/customers").hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE", "SOFOR")
@@ -55,6 +59,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/products").hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE", "SOFOR")
                         .requestMatchers(HttpMethod.GET, "/api/routes/{id}").hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE", "SOFOR")
                         .requestMatchers(HttpMethod.GET, "/api/customers/{id}/products").hasAnyRole("YONETICI", "DEVELOPER", "SOFOR", "MUHASEBE")
+
                         // YÖNETİCİ/MUHASEBE İÇİN GENEL KURALLAR
                         .requestMatchers("/api/admin/**").hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE")
                         .anyRequest().hasAnyRole("YONETICI", "DEVELOPER", "MUHASEBE")

@@ -30,6 +30,7 @@ public class UserService {
         }
         User user = userMapper.toUser(request);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
+        // TCKN alanı zaten mapper tarafından set ediliyor.
         User savedUser = userRepository.save(user);
         return userMapper.toUserResponse(savedUser);
     }
@@ -53,7 +54,6 @@ public class UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Kullanıcı bulunamadı: " + id));
 
-        // YENİ KONTROL: Admin kullanıcısı düzenlenemez.
         if ("admin".equals(user.getUsername())) {
             throw new IllegalArgumentException("Admin kullanıcısı düzenlenemez.");
         }
@@ -67,6 +67,7 @@ public class UserService {
         user.setSurname(request.getSurname());
         user.setPhoneNumber(request.getPhoneNumber());
         user.setRole(request.getRole());
+        user.setTckn(request.getTckn()); // YENİ ALAN GÜNCELLENDİ
 
         if (StringUtils.hasText(request.getPassword())) {
             user.setPassword(passwordEncoder.encode(request.getPassword()));
@@ -81,7 +82,6 @@ public class UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Kullanıcı bulunamadı: " + id));
 
-        // YENİ KONTROL: Admin kullanıcısı silinemez.
         if ("admin".equals(user.getUsername())) {
             throw new IllegalArgumentException("Admin kullanıcısı silinemez.");
         }

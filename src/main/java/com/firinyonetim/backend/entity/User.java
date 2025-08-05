@@ -18,15 +18,18 @@ public class User implements UserDetails {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // YENİ EKLENDİ - Giriş için kullanılacak
     @Column(unique = true, nullable = false)
     private String username;
 
     private String name;
     private String surname;
 
-    @Column(unique = true) // Telefon no hala benzersiz ama nullable olabilir
+    @Column(unique = true)
     private String phoneNumber;
+
+    // YENİ ALAN
+    @Column(length = 11)
+    private String tckn;
 
     @Column(nullable = false)
     private String password;
@@ -35,13 +38,12 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private Role role;
 
-    // --- UserDetails Metodları (Güncellendi) ---
+    // --- UserDetails Metodları ---
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
     }
 
-    // getUsername() metodu artık doğruca username alanını döndürüyor.
     @Override
     public String getUsername() {
         return username;
