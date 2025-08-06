@@ -9,6 +9,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/ewaybill-customer-info")
 @RequiredArgsConstructor
@@ -30,4 +32,11 @@ public class EWaybillCustomerController {
     public ResponseEntity<EWaybillCustomerInfoResponse> saveOrUpdateInfo(@PathVariable Long customerId, @Valid @RequestBody EWaybillCustomerInfoRequest request) {
         return ResponseEntity.ok(customerService.saveOrUpdateInfo(customerId, request));
     }
+
+    // YENİ ENDPOINT
+    @PostMapping("/{customerId}/query-gib")
+    public ResponseEntity<List<String>> queryGib(@PathVariable Long customerId) {
+        return ResponseEntity.ok(customerService.queryGibAndSaveInfo(customerId));
+    }
+
 }
