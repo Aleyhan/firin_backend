@@ -6,4 +6,5 @@ import lombok.Data;
 public class UnitDto {
     private Long id;
     private String name;
+    private String code; // YENİ ALAN
 }

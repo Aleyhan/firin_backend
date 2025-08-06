@@ -13,4 +13,8 @@ public class Unit {
 
     @Column(nullable = false, unique = true)
     private String name;
+
+    // YENİ ALAN: GİB/UBL standardındaki birim kodu (C62, KGM vb.)
+    @Column(nullable = true, unique = true, length = 10)
+    private String code;
 }

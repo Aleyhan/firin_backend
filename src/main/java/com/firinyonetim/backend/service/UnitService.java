@@ -29,6 +29,7 @@ public class UnitService {
     public UnitDto createUnit(UnitDto dto) {
         Unit unit = new Unit();
         unit.setName(dto.getName());
+        unit.setCode(dto.getCode()); // YENİ
         Unit saved = unitRepository.save(unit);
         return unitMapper.toDto(saved);
     }
@@ -39,6 +40,7 @@ public class UnitService {
         Unit unit = unitRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Unit not found with id: " + id));
         unit.setName(dto.getName());
+        unit.setCode(dto.getCode()); // YENİ
         Unit updated = unitRepository.save(unit);
         return unitMapper.toDto(updated);
     }

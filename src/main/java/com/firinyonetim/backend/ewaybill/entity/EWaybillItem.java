@@ -28,17 +28,25 @@ public class EWaybillItem {
     private Product product;
 
     @Column(nullable = false)
-    private String productNameSnapshot; // İrsaliye anındaki ürün adı
+    private String productNameSnapshot;
 
     @Column(nullable = false, precision = 18, scale = 6)
     private BigDecimal quantity;
 
     @Column(nullable = false, length = 10)
-    private String unitCode; // C62, KGM etc.
+    private String unitCode;
 
     @Column(nullable = false, precision = 18, scale = 6)
-    private BigDecimal unitPrice; // KDV Hariç
+    private BigDecimal unitPrice;
 
     @Column(nullable = false, precision = 18, scale = 2)
-    private BigDecimal lineAmount; // quantity * unitPrice
+    private BigDecimal lineAmount;
+
+    // DÜZELTME: Varsayılan değer eklendi
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private Integer vatRate;
+
+    // DÜZELTME: Varsayılan değer eklendi
+    @Column(nullable = false, precision = 18, scale = 2, columnDefinition = "numeric(18,2) default 0.00")
+    private BigDecimal vatAmount;
 }

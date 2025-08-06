@@ -12,4 +12,6 @@ public class EWaybillItemResponse {
     private String unitCode;
     private BigDecimal unitPrice;
     private BigDecimal lineAmount;
+    private Integer vatRate; // YENİ
+    private BigDecimal vatAmount; // YENİ
 }

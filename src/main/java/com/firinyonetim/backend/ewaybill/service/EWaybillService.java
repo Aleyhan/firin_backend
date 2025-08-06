@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.firinyonetim.backend.entity.Address;
 import com.firinyonetim.backend.entity.Customer;
 import com.firinyonetim.backend.entity.Product;
+import com.firinyonetim.backend.entity.Route;
 import com.firinyonetim.backend.entity.TaxInfo;
 import com.firinyonetim.backend.entity.User;
 import com.firinyonetim.backend.ewaybill.dto.request.EWaybillCreateRequest;
@@ -20,17 +21,22 @@ import com.firinyonetim.backend.ewaybill.repository.EWaybillRepository;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.repository.CustomerRepository;
 import com.firinyonetim.backend.repository.ProductRepository;
+import com.firinyonetim.backend.repository.RouteRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -43,6 +49,7 @@ public class EWaybillService {
     private final EWaybillRepository eWaybillRepository;
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
+    private final RouteRepository routeRepository;
     private final TurkcellEWaybillClient turkcellClient;
     private final EWaybillMapper eWaybillMapper;
     private final ObjectMapper objectMapper;
@@ -82,6 +89,13 @@ public class EWaybillService {
         ewaybill.setCreatedBy(currentUser);
         ewaybill.setCustomer(customer);
 
+        // DÜZELTME: Rota ID'si geldiyse, rotayı bul ve plakasını set et
+        if (request.getRouteId() != null) {
+            Route route = routeRepository.findById(request.getRouteId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + request.getRouteId()));
+            ewaybill.setPlateNumber(route.getPlaka());
+            log.info("Route found for e-waybill: {}, Plate number set to: {}", route.getId(), route.getPlaka());
+        }
         try {
             ewaybill.setDeliveryAddressJson(objectMapper.writeValueAsString(customer.getAddress()));
         } catch (JsonProcessingException e) {
@@ -91,6 +105,8 @@ public class EWaybillService {
 
         Set<EWaybillItem> items = processItems(request.getItems(), ewaybill);
         ewaybill.setItems(items);
+
+        calculateAndSetTotals(ewaybill);
 
         EWaybill savedEWaybill = eWaybillRepository.save(ewaybill);
         return eWaybillMapper.toResponseDto(savedEWaybill);
@@ -107,9 +123,20 @@ public class EWaybillService {
 
         eWaybillMapper.updateFromRequest(request, ewaybill);
 
+        // DÜZELTME: Rota ID'si geldiyse, rotayı bul ve plakasını set et
+        if (request.getRouteId() != null) {
+            Route route = routeRepository.findById(request.getRouteId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + request.getRouteId()));
+            ewaybill.setPlateNumber(route.getPlaka());
+        } else {
+            ewaybill.setPlateNumber(null); // Rota kaldırıldıysa plakayı da temizle
+        }
+
         ewaybill.getItems().clear();
         Set<EWaybillItem> updatedItems = processItems(request.getItems(), ewaybill);
         ewaybill.getItems().addAll(updatedItems);
+
+        calculateAndSetTotals(ewaybill);
 
         EWaybill updated = eWaybillRepository.save(ewaybill);
         return eWaybillMapper.toResponseDto(updated);
@@ -137,12 +164,40 @@ public class EWaybillService {
             item.setProduct(product);
             item.setProductNameSnapshot(product.getName());
             item.setQuantity(itemDto.getQuantity());
-            item.setUnitPrice(itemDto.getUnitPrice());
-            item.setUnitCode("C62"); // TODO: Bu alan dinamik olmalı
-            item.setLineAmount(itemDto.getQuantity().multiply(itemDto.getUnitPrice()));
+
+            BigDecimal unitPrice = itemDto.getUnitPrice() != null ? itemDto.getUnitPrice() : BigDecimal.ZERO;
+            item.setUnitPrice(unitPrice);
+
+            String unitCode = "C62";
+            if (product.getUnit() != null && StringUtils.hasText(product.getUnit().getCode())) {
+                unitCode = product.getUnit().getCode();
+            }
+            item.setUnitCode(unitCode);
+
+            BigDecimal lineAmount = itemDto.getQuantity().multiply(unitPrice);
+            item.setLineAmount(lineAmount.setScale(2, RoundingMode.HALF_UP));
+
+            item.setVatRate(product.getVatRate());
+            BigDecimal vatAmount = lineAmount.multiply(BigDecimal.valueOf(product.getVatRate())).divide(new BigDecimal(100));
+            item.setVatAmount(vatAmount.setScale(2, RoundingMode.HALF_UP));
+
             items.add(item);
         }
         return items;
+    }
+
+    private void calculateAndSetTotals(EWaybill ewaybill) {
+        BigDecimal totalAmountWithoutVat = BigDecimal.ZERO;
+        BigDecimal totalVatAmount = BigDecimal.ZERO;
+
+        for (EWaybillItem item : ewaybill.getItems()) {
+            totalAmountWithoutVat = totalAmountWithoutVat.add(item.getLineAmount());
+            totalVatAmount = totalVatAmount.add(item.getVatAmount());
+        }
+
+        ewaybill.setTotalAmountWithoutVat(totalAmountWithoutVat.setScale(2, RoundingMode.HALF_UP));
+        ewaybill.setTotalVatAmount(totalVatAmount.setScale(2, RoundingMode.HALF_UP));
+        ewaybill.setTotalAmountWithVat(totalAmountWithoutVat.add(totalVatAmount).setScale(2, RoundingMode.HALF_UP));
     }
 
     @Transactional
@@ -159,7 +214,7 @@ public class EWaybillService {
 
         try {
             TurkcellApiResponse response = turkcellClient.createEWaybill(request);
-            log.info("Turkcell API response: {}", objectMapper.writeValueAsString(response));
+
             ewaybill.setTurkcellApiId(response.getId());
             ewaybill.setEwaybillNumber(response.getDespatchAdviceNumber() != null ? response.getDespatchAdviceNumber() : response.getDespatchNumber());
             ewaybill.setStatus(EWaybillStatus.SENDING);
@@ -169,19 +224,17 @@ public class EWaybillService {
             eWaybillRepository.save(ewaybill);
             log.info("E-waybill {} successfully sent to Turkcell API. Turkcell ID: {}", ewaybillId, response.getId());
 
-        } catch (HttpClientErrorException e) { // DÜZELTME: Genel Exception yerine spesifik hatayı yakala
-            // HttpClientErrorException, 4xx ve 5xx hatalarını içerir ve response body'sine erişim sağlar.
+        } catch (HttpClientErrorException e) {
             String responseBody = e.getResponseBodyAsString();
             log.error("Error sending e-waybill {} to Turkcell API. Status: {}, Body: {}", ewaybillId, e.getStatusCode(), responseBody);
 
             ewaybill.setStatus(EWaybillStatus.API_ERROR);
-            ewaybill.setStatusMessage(responseBody); // Hatanın JSON gövdesini direkt kaydet
+            ewaybill.setStatusMessage(responseBody);
             eWaybillRepository.save(ewaybill);
 
-            // Frontend'e de bu detaylı JSON mesajını fırlat
             throw new RuntimeException(responseBody, e);
 
-        } catch (Exception e) { // Diğer tüm hatalar için (örn: ağ bağlantısı yok)
+        } catch (Exception e) {
             log.error("Generic error sending e-waybill {} to Turkcell API: {}", ewaybillId, e.getMessage());
 
             ewaybill.setStatus(EWaybillStatus.API_ERROR);
@@ -201,25 +254,22 @@ public class EWaybillService {
         if (taxInfo == null) throw new IllegalStateException("Customer tax info is required to send an e-waybill.");
         if (address == null) throw new IllegalStateException("Customer address is required to send an e-waybill.");
 
-        // AddressBook nesnesini zenginleştir
         TurkcellApiRequest.AddressBook addressBook = new TurkcellApiRequest.AddressBook();
         addressBook.setIdentificationNumber(taxInfo.getTaxNumber());
         addressBook.setName(customer.getName());
-        addressBook.setAlias("urn:mail:defaulttest3pk@medyasoft.com.tr"); // TODO: Dinamik yap
-        addressBook.setReceiverCity(address.getProvince()); // YENİ
-        addressBook.setReceiverDistrict(address.getDistrict()); // YENİ
-        addressBook.setReceiverCountry("Türkiye"); // YENİ
+        addressBook.setAlias("urn:mail:defaulttest3pk@medyasoft.com.tr");
+        addressBook.setReceiverCity(address.getProvince());
+        addressBook.setReceiverDistrict(address.getDistrict());
+        addressBook.setReceiverCountry("Türkiye");
         request.setAddressBook(addressBook);
 
-        // DeliveryAddressInfo (Bu zaten doğruydu)
         TurkcellApiRequest.DeliveryAddressInfo deliveryAddress = new TurkcellApiRequest.DeliveryAddressInfo();
         deliveryAddress.setCity(address.getProvince());
         deliveryAddress.setDistrict(address.getDistrict());
         deliveryAddress.setCountryName("Türkiye");
-        deliveryAddress.setZipCode("34000"); // TODO: Dinamik yap
+        deliveryAddress.setZipCode("34000");
         request.setDeliveryAddressInfo(deliveryAddress);
 
-        // DespatchBuyerCustomerInfo (Bu zaten doğruydu)
         TurkcellApiRequest.DespatchBuyerCustomerInfo buyerInfo = new TurkcellApiRequest.DespatchBuyerCustomerInfo();
         buyerInfo.setIdentificationNumber(taxInfo.getTaxNumber());
         buyerInfo.setName(customer.getName());
@@ -228,37 +278,110 @@ public class EWaybillService {
         buyerInfo.setCountryName("Türkiye");
         request.setDespatchBuyerCustomerInfo(buyerInfo);
 
-        // DespatchShipmentInfo (Bu zaten doğruydu)
         TurkcellApiRequest.DespatchShipmentInfo shipmentInfo = new TurkcellApiRequest.DespatchShipmentInfo();
-        shipmentInfo.setShipmentSenderTitle(ewaybill.getCarrierName());
-        shipmentInfo.setShipmentSenderTcknVkn(ewaybill.getCarrierVknTckn());
+        String vknTckn = ewaybill.getCarrierVknTckn();
+        String name = ewaybill.getCarrierName();
+
+        shipmentInfo.setShipmentSenderTitle(senderName);
+        shipmentInfo.setShipmentSenderTcknVkn(senderVkn);
+
+        if (StringUtils.hasText(ewaybill.getPlateNumber())) {
+            shipmentInfo.setShipmentPlateNo(ewaybill.getPlateNumber());
+        }
+
+        if (StringUtils.hasText(name) && StringUtils.hasText(vknTckn)) {
+            TurkcellApiRequest.DriverLine driverLine = new TurkcellApiRequest.DriverLine();
+            driverLine.setDriverTckn(vknTckn);
+
+            int lastSpaceIndex = name.lastIndexOf(' ');
+            if (lastSpaceIndex > 0 && (lastSpaceIndex < name.length() - 1)) {
+                driverLine.setDriverName(name.substring(0, lastSpaceIndex));
+                driverLine.setDriverSurname(name.substring(lastSpaceIndex + 1));
+            } else {
+                driverLine.setDriverName(name);
+                driverLine.setDriverSurname("-");
+            }
+            shipmentInfo.setDriverLines(List.of(driverLine));
+        }
         request.setDespatchShipmentInfo(shipmentInfo);
 
-        // SellerSupplierInfo'yu güncelle
         TurkcellApiRequest.SellerSupplierInfo sellerInfo = new TurkcellApiRequest.SellerSupplierInfo();
         sellerInfo.setIdentificationNumber(senderVkn);
         sellerInfo.setName(senderName);
-        sellerInfo.setPersonSurName("-"); // YENİ: Zorunlu alan için placeholder
+        sellerInfo.setPersonSurName("-");
         sellerInfo.setCity(senderCity);
         sellerInfo.setDistrict(senderDistrict);
         sellerInfo.setCountryName(senderCountry);
         request.setSellerSupplierInfo(sellerInfo);
+
+        List<TurkcellApiRequest.DespatchLine> despatchLines = new ArrayList<>();
+        for (EWaybillItem item : ewaybill.getItems()) {
+            TurkcellApiRequest.DespatchLine line = new TurkcellApiRequest.DespatchLine();
+
+            line.setProductName(item.getProductNameSnapshot());
+            line.setAmount(item.getQuantity());
+            line.setUnitCode(item.getUnitCode());
+
+            if (item.getUnitPrice() != null && item.getUnitPrice().compareTo(BigDecimal.ZERO) > 0) {
+                line.setUnitPrice(item.getUnitPrice());
+                line.setLineAmount(item.getLineAmount());
+                line.setManufacturersItemIdentification(item.getProduct().getId().toString());
+
+                TurkcellApiRequest.TaxSubTotal lineTaxSubTotal = new TurkcellApiRequest.TaxSubTotal();
+                lineTaxSubTotal.setTaxableAmount(item.getLineAmount());
+                lineTaxSubTotal.setTaxAmount(item.getVatAmount());
+                lineTaxSubTotal.setPercent(item.getVatRate());
+
+                TurkcellApiRequest.TaxTotal lineTaxTotal = new TurkcellApiRequest.TaxTotal();
+                lineTaxTotal.setTaxAmount(item.getVatAmount());
+                lineTaxTotal.setTaxSubTotals(List.of(lineTaxSubTotal));
+
+                line.setLineTaxTotal(lineTaxTotal);
+            }
+
+            despatchLines.add(line);
+        }
+        request.setDespatchLines(despatchLines);
+
+        Map<Integer, BigDecimal> vatRateToTaxableAmountMap = ewaybill.getItems().stream()
+                .collect(Collectors.groupingBy(
+                        EWaybillItem::getVatRate,
+                        Collectors.mapping(EWaybillItem::getLineAmount, Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))
+                ));
+
+        List<TurkcellApiRequest.TaxSubTotal> taxSubTotals = new ArrayList<>();
+        for (Map.Entry<Integer, BigDecimal> entry : vatRateToTaxableAmountMap.entrySet()) {
+            Integer vatRate = entry.getKey();
+            BigDecimal taxableAmount = entry.getValue();
+            BigDecimal taxAmount = taxableAmount.multiply(BigDecimal.valueOf(vatRate)).divide(new BigDecimal(100));
+
+            TurkcellApiRequest.TaxSubTotal subTotal = new TurkcellApiRequest.TaxSubTotal();
+            subTotal.setPercent(vatRate);
+            subTotal.setTaxableAmount(taxableAmount.setScale(2, RoundingMode.HALF_UP));
+            subTotal.setTaxAmount(taxAmount.setScale(2, RoundingMode.HALF_UP));
+            taxSubTotals.add(subTotal);
+        }
+
+        TurkcellApiRequest.TaxTotal totalTax = new TurkcellApiRequest.TaxTotal();
+        totalTax.setTaxAmount(ewaybill.getTotalVatAmount());
+        totalTax.setTaxSubTotals(taxSubTotals);
+        request.setTaxTotal(totalTax);
+
+        request.getGeneralInfo().setPayableAmount(ewaybill.getTotalAmountWithVat());
+        request.getGeneralInfo().setTotalAmount(ewaybill.getTotalAmountWithoutVat());
 
         return request;
     }
 
     @Transactional
     public void checkAndUpdateStatuses() {
-        // DÜZELTME: Yeni repository metodunu kullanıyoruz.
         List<EWaybill> ewaybillsToCheck = eWaybillRepository.findEWaybillsToQueryStatus();
-
         if (ewaybillsToCheck.isEmpty()) {
             return;
         }
         log.info("Found {} e-waybills with SENDING or AWAITING_APPROVAL status to check.", ewaybillsToCheck.size());
 
         for (EWaybill ewaybill : ewaybillsToCheck) {
-            // turkcellApiId'si olmayan bir kayıt varsa (beklenmedik bir durum), atla.
             if (ewaybill.getTurkcellApiId() == null) {
                 log.warn("E-waybill with internal id {} has a status to be checked but no Turkcell API ID. Skipping.", ewaybill.getId());
                 continue;
@@ -298,7 +421,6 @@ public class EWaybillService {
                 ewaybill.getId(), ewaybill.getTurkcellStatus(), ewaybill.getStatus());
     }
 
-    // YENİ METOT
     @Transactional(readOnly = true)
     public byte[] getEWaybillPdf(UUID id) {
         EWaybill ewaybill = eWaybillRepository.findById(id)
@@ -309,7 +431,6 @@ public class EWaybillService {
         return turkcellClient.getEWaybillAsPdf(ewaybill.getTurkcellApiId());
     }
 
-    // YENİ METOT
     @Transactional(readOnly = true)
     public String getEWaybillHtml(UUID id) {
         EWaybill ewaybill = eWaybillRepository.findById(id)

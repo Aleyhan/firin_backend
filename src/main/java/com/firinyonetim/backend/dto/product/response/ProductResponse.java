@@ -15,7 +15,10 @@ public class ProductResponse {
     private Long unitId;
     private String unitName;
     private Integer grammage;
-
-    // YENİ ALAN
     private Integer unitsPerCrate;
+    // YENİ ALAN: Ürün kodunu da ekleyelim. Varsayımsal olarak ID'yi string'e çeviriyoruz.
+    // Eğer özel bir kod alanı varsa, o kullanılmalı.
+    public String getProductCode() {
+        return String.valueOf(id);
+    }
 }

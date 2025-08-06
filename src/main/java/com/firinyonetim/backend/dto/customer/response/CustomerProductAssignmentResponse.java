@@ -8,11 +8,12 @@ import java.math.BigDecimal;
 public class CustomerProductAssignmentResponse {
     private Long productId;
     private String productName;
+    private String productCode; // YENİ ALAN
+    private String unitCode; // YENİ ALAN
+    private String unitName; // YENİ ALAN
     private PricingType pricingType;
     private BigDecimal specialPrice;
     private BigDecimal basePrice;
-    private Integer vatRate; // KDV hesaplaması için bu alana da ihtiyacımız var
-
-    // YENİ ALAN: Backend'de hesaplanıp frontend'e hazır gönderilecek nihai birim fiyat.
+    private Integer vatRate;
     private BigDecimal finalUnitPrice;
 }

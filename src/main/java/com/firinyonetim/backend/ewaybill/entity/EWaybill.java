@@ -9,6 +9,7 @@ import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -69,10 +70,22 @@ public class EWaybill {
     // Taşıyıcı Bilgileri (Şoför veya Firma olabilir)
     private String carrierName; // Taşıyıcı Unvanı veya Şoför Adı Soyadı
     private String carrierVknTckn; // Taşıyıcı VKN/TCKN
+    private String plateNumber; // YENİ ALAN: Plaka
+
 
     // Adres Bilgileri (JSON olarak saklanabilir veya ayrı bir entity yapılabilir)
     @Column(columnDefinition = "TEXT")
     private String deliveryAddressJson;
+
+    // DÜZELTME: Varsayılan değerler eklendi
+    @Column(nullable = false, precision = 18, scale = 2, columnDefinition = "numeric(18,2) default 0.00")
+    private BigDecimal totalAmountWithoutVat;
+
+    @Column(nullable = false, precision = 18, scale = 2, columnDefinition = "numeric(18,2) default 0.00")
+    private BigDecimal totalVatAmount;
+
+    @Column(nullable = false, precision = 18, scale = 2, columnDefinition = "numeric(18,2) default 0.00")
+    private BigDecimal totalAmountWithVat;
 
     // Kalemler
     @ToString.Exclude

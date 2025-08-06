@@ -10,6 +10,10 @@ public interface CustomerProductAssignmentMapper {
 
     @Mapping(source = "product.id", target = "productId")
     @Mapping(source = "product.name", target = "productName")
+    @Mapping(source = "product.id", target = "productCode") // YENİ MAPPING (ID'yi koda mapliyoruz)
+    @Mapping(source = "product.unit.code", target = "unitCode") // YENİ MAPPING
+    @Mapping(source = "product.unit.name", target = "unitName") // YENİ MAPPING
+
     @Mapping(source = "product.basePrice", target = "basePrice")
     @Mapping(source = "product.vatRate", target = "vatRate") // YENİ MAPPING
     CustomerProductAssignmentResponse toResponse(CustomerProductAssignment assignment);

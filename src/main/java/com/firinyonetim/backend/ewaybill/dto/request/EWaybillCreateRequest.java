@@ -17,6 +17,8 @@ public class EWaybillCreateRequest {
     @NotNull(message = "Müşteri ID'si boş olamaz.")
     private Long customerId;
 
+    private Long routeId; // YENİ ALAN: İsteğe bağlı rota ID'si
+
     @NotNull(message = "İrsaliye tarihi boş olamaz.")
     private LocalDate issueDate;
 
@@ -38,4 +40,18 @@ public class EWaybillCreateRequest {
     // @NotEmpty(message = "İrsaliye en az bir kalem içermelidir.")
     @Valid
     private Set<EWaybillItemRequest> items;
+
+    @Valid   // YENİ
+    private EWaybillFieldConfig fieldConfig; // YENİ ALAN
+
+
+    // YENİ İÇ SINIF
+    @Data
+    public static class EWaybillFieldConfig {
+        private boolean includeProductCode = true;
+        private boolean includeUnitPrice = true;
+        private boolean includeVat = true;
+        private boolean includeTotals = true;
+    }
+
 }
