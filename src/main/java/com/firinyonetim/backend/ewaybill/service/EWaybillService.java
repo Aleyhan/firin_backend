@@ -13,10 +13,9 @@ import com.firinyonetim.backend.ewaybill.dto.request.EWaybillItemRequest;
 import com.firinyonetim.backend.ewaybill.dto.response.EWaybillResponse;
 import com.firinyonetim.backend.ewaybill.dto.turkcell.TurkcellApiRequest;
 import com.firinyonetim.backend.ewaybill.dto.turkcell.TurkcellApiResponse;
-import com.firinyonetim.backend.ewaybill.entity.EWaybill;
-import com.firinyonetim.backend.ewaybill.entity.EWaybillItem;
-import com.firinyonetim.backend.ewaybill.entity.EWaybillStatus;
+import com.firinyonetim.backend.ewaybill.entity.*;
 import com.firinyonetim.backend.ewaybill.mapper.EWaybillMapper;
+import com.firinyonetim.backend.ewaybill.repository.EWaybillCustomerInfoRepository;
 import com.firinyonetim.backend.ewaybill.repository.EWaybillRepository;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.repository.CustomerRepository;
@@ -53,6 +52,7 @@ public class EWaybillService {
     private final TurkcellEWaybillClient turkcellClient;
     private final EWaybillMapper eWaybillMapper;
     private final ObjectMapper objectMapper;
+    private final EWaybillCustomerInfoRepository eWaybillCustomerInfoRepository;
 
     @Value("${ewaybill.sender.vkn}")
     private String senderVkn;
@@ -254,10 +254,24 @@ public class EWaybillService {
         if (taxInfo == null) throw new IllegalStateException("Customer tax info is required to send an e-waybill.");
         if (address == null) throw new IllegalStateException("Customer address is required to send an e-waybill.");
 
+
+        // DİNAMİK ALIAS MANTIĞI
+        EWaybillCustomerInfo customerInfo = eWaybillCustomerInfoRepository.findById(customer.getId())
+                .orElseThrow(() -> new IllegalStateException("E-Waybill info for customer " + customer.getName() + " is not configured."));
+
+        String targetAlias;
+        if (customerInfo.getRecipientType() == EWaybillRecipientType.REGISTERED_USER) {
+            targetAlias = customerInfo.getDefaultAlias();
+        } else {
+            targetAlias = "urn:mail:irsaliyepk@gib.gov.tr";
+        }
+
         TurkcellApiRequest.AddressBook addressBook = new TurkcellApiRequest.AddressBook();
         addressBook.setIdentificationNumber(taxInfo.getTaxNumber());
         addressBook.setName(customer.getName());
-        addressBook.setAlias("urn:mail:defaulttest3pk@medyasoft.com.tr");
+        addressBook.setAlias(targetAlias); // DİNAMİK DEĞERİ ATA
+
+
         addressBook.setReceiverCity(address.getProvince());
         addressBook.setReceiverDistrict(address.getDistrict());
         addressBook.setReceiverCountry("Türkiye");
