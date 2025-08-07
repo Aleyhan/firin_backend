@@ -13,7 +13,6 @@ public class EWaybillTemplateRequest {
     private String carrierName;
     private String carrierVknTckn;
     private String plateNumber;
-    private Set<String> includedFields; // YENİ ALAN
 
     @NotEmpty
     @Valid

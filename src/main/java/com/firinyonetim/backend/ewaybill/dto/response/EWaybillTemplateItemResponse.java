@@ -11,8 +11,4 @@ public class EWaybillTemplateItemResponse {
     private String productNameSnapshot;
     private BigDecimal quantity;
     private String unitCode;
-    private BigDecimal unitPrice;
-    private BigDecimal lineAmount;
-    private Integer vatRate;
-    private BigDecimal vatAmount;
 }

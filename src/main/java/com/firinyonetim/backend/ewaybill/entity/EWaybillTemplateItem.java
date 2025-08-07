@@ -36,16 +36,4 @@ public class EWaybillTemplateItem {
 
     @Column(nullable = false, length = 10)
     private String unitCode;
-
-    @Column(nullable = false, precision = 18, scale = 6)
-    private BigDecimal unitPrice;
-
-    @Column(nullable = false, precision = 18, scale = 2)
-    private BigDecimal lineAmount;
-
-    @Column(nullable = false)
-    private Integer vatRate;
-
-    @Column(nullable = false, precision = 18, scale = 2)
-    private BigDecimal vatAmount;
 }

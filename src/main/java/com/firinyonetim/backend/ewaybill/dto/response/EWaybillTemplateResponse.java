@@ -2,7 +2,6 @@
 package com.firinyonetim.backend.ewaybill.dto.response;
 
 import lombok.Data;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Set;
 
@@ -14,10 +13,6 @@ public class EWaybillTemplateResponse {
     private String carrierName;
     private String carrierVknTckn;
     private String plateNumber;
-    private Set<String> includedFields; // YENİ ALAN
-    private BigDecimal totalAmountWithoutVat;
-    private BigDecimal totalVatAmount;
-    private BigDecimal totalAmountWithVat;
     private Set<EWaybillTemplateItemResponse> items;
     private LocalDateTime updatedAt;
 }

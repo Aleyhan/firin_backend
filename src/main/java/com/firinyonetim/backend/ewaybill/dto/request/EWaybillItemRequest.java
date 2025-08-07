@@ -1,3 +1,4 @@
+// src/main/java/com/firinyonetim/backend/ewaybill/dto/request/EWaybillItemRequest.java
 package com.firinyonetim.backend.ewaybill.dto.request;
 
 import jakarta.validation.constraints.DecimalMin;
@@ -14,8 +15,4 @@ public class EWaybillItemRequest {
     @NotNull(message = "Miktar boş olamaz.")
     @DecimalMin(value = "0.000001", message = "Miktar sıfırdan büyük olmalıdır.")
     private BigDecimal quantity;
-
-    // DÜZENLEME: @NotNull kaldırıldı, artık isteğe bağlı.
-    @DecimalMin(value = "0.0", message = "Birim fiyat negatif olamaz.")
-    private BigDecimal unitPrice;
 }

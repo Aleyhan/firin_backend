@@ -10,7 +10,6 @@ import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
@@ -39,21 +38,6 @@ public class EWaybillTemplate {
     private String carrierName;
     private String carrierVknTckn;
     private String plateNumber;
-
-    // YENİ ALAN
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "e_waybill_template_included_fields", joinColumns = @JoinColumn(name = "template_id"))
-    @Column(name = "field_name")
-    private Set<String> includedFields = new HashSet<>();
-
-    @Column(nullable = false, precision = 18, scale = 2)
-    private BigDecimal totalAmountWithoutVat = BigDecimal.ZERO;
-
-    @Column(nullable = false, precision = 18, scale = 2)
-    private BigDecimal totalVatAmount = BigDecimal.ZERO;
-
-    @Column(nullable = false, precision = 18, scale = 2)
-    private BigDecimal totalAmountWithVat = BigDecimal.ZERO;
 
     @ToString.Exclude
     @EqualsAndHashCode.Exclude

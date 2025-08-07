@@ -15,8 +15,4 @@ public class EWaybillTemplateItemRequest {
     @NotNull
     @DecimalMin(value = "0.000001", message = "Miktar sıfırdan büyük olmalıdır.")
     private BigDecimal quantity;
-
-    @NotNull
-    @DecimalMin(value = "0.0", message = "Birim fiyat negatif olamaz.")
-    private BigDecimal unitPrice;
 }

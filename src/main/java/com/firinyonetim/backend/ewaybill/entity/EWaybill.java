@@ -1,3 +1,4 @@
+// src/main/java/com/firinyonetim/backend/ewaybill/entity/EWaybill.java
 package com.firinyonetim.backend.ewaybill.entity;
 
 import com.firinyonetim.backend.entity.Customer;
@@ -9,7 +10,6 @@ import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -26,23 +26,21 @@ public class EWaybill {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    // Turkcell API Entegrasyon Bilgileri
     @Column(unique = true)
-    private String turkcellApiId; // Turkcell'den dönen UUID
+    private String turkcellApiId;
 
     @Column(unique = true)
-    private String ewaybillNumber; // D03... ile başlayan resmi numara
+    private String ewaybillNumber;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private EWaybillStatus status = EWaybillStatus.DRAFT;
 
-    private Integer turkcellStatus; // 0, 20, 40, 60, 70 gibi
+    private Integer turkcellStatus;
 
     @Column(columnDefinition = "TEXT")
-    private String statusMessage; // API'den dönen mesaj
+    private String statusMessage;
 
-    // Genel İrsaliye Bilgileri
     @Column(nullable = false)
     private LocalDate issueDate;
 
@@ -58,42 +56,26 @@ public class EWaybill {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
-    // İlişkili Taraflar
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id", nullable = false)
-    private Customer customer; // Alıcı
+    private Customer customer;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by_user_id", nullable = false)
     private User createdBy;
 
-    // Taşıyıcı Bilgileri (Şoför veya Firma olabilir)
-    private String carrierName; // Taşıyıcı Unvanı veya Şoför Adı Soyadı
-    private String carrierVknTckn; // Taşıyıcı VKN/TCKN
-    private String plateNumber; // YENİ ALAN: Plaka
+    private String carrierName;
+    private String carrierVknTckn;
+    private String plateNumber;
 
-
-    // Adres Bilgileri (JSON olarak saklanabilir veya ayrı bir entity yapılabilir)
     @Column(columnDefinition = "TEXT")
     private String deliveryAddressJson;
 
-    // DÜZELTME: Varsayılan değerler eklendi
-    @Column(nullable = false, precision = 18, scale = 2, columnDefinition = "numeric(18,2) default 0.00")
-    private BigDecimal totalAmountWithoutVat;
-
-    @Column(nullable = false, precision = 18, scale = 2, columnDefinition = "numeric(18,2) default 0.00")
-    private BigDecimal totalVatAmount;
-
-    @Column(nullable = false, precision = 18, scale = 2, columnDefinition = "numeric(18,2) default 0.00")
-    private BigDecimal totalAmountWithVat;
-
-    // Kalemler
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     @OneToMany(mappedBy = "eWaybill", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private Set<EWaybillItem> items = new HashSet<>();
 
-    // Zaman Damgaları
     @CreationTimestamp
     private LocalDateTime createdAt;
 

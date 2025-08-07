@@ -1,13 +1,10 @@
+// src/main/java/com/firinyonetim/backend/ewaybill/service/EWaybillService.java
 package com.firinyonetim.backend.ewaybill.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.firinyonetim.backend.entity.Address;
-import com.firinyonetim.backend.entity.Customer;
-import com.firinyonetim.backend.entity.Product;
-import com.firinyonetim.backend.entity.Route;
-import com.firinyonetim.backend.entity.TaxInfo;
-import com.firinyonetim.backend.entity.User;
+import com.firinyonetim.backend.entity.*;
+import com.firinyonetim.backend.ewaybill.dto.request.BulkEWaybillFromTemplateRequest;
 import com.firinyonetim.backend.ewaybill.dto.request.EWaybillCreateRequest;
 import com.firinyonetim.backend.ewaybill.dto.request.EWaybillItemRequest;
 import com.firinyonetim.backend.ewaybill.dto.response.EWaybillResponse;
@@ -17,6 +14,7 @@ import com.firinyonetim.backend.ewaybill.entity.*;
 import com.firinyonetim.backend.ewaybill.mapper.EWaybillMapper;
 import com.firinyonetim.backend.ewaybill.repository.EWaybillCustomerInfoRepository;
 import com.firinyonetim.backend.ewaybill.repository.EWaybillRepository;
+import com.firinyonetim.backend.ewaybill.repository.EWaybillTemplateRepository;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.repository.CustomerRepository;
 import com.firinyonetim.backend.repository.ProductRepository;
@@ -30,25 +28,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 
-import com.firinyonetim.backend.entity.DayOfWeek; // YENİ IMPORT
-import java.time.format.TextStyle; // YENİ IMPORT
-import java.util.Locale; // YENİ IMPORT
-import java.util.Set; // YENİ IMPORT
-
-import com.firinyonetim.backend.ewaybill.dto.request.BulkEWaybillFromTemplateRequest; // YENİ
-import com.firinyonetim.backend.ewaybill.entity.EWaybillTemplate; // YENİ
-import com.firinyonetim.backend.ewaybill.repository.EWaybillTemplateRepository; // YENİ
-import java.util.ArrayList; // YENİ
-import java.util.List; // YENİ
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.time.LocalDate;
+import java.time.format.TextStyle;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -66,6 +48,7 @@ public class EWaybillService {
     private final EWaybillCustomerInfoRepository eWaybillCustomerInfoRepository;
     private final EWaybillTemplateRepository eWaybillTemplateRepository;
 
+    // --- EKSİK OLAN ALANLAR BURAYA EKLENDİ ---
     @Value("${ewaybill.sender.vkn}")
     private String senderVkn;
     @Value("${ewaybill.sender.name}")
@@ -76,6 +59,7 @@ public class EWaybillService {
     private String senderDistrict;
     @Value("${ewaybill.sender.country}")
     private String senderCountry;
+    // --- EKSİK ALANLARIN SONU ---
 
     @Transactional(readOnly = true)
     public List<EWaybillResponse> findAll() {
@@ -99,16 +83,15 @@ public class EWaybillService {
 
         validateIssueDate(customer, request.getIssueDate());
 
-        EWaybill ewaybill = eWaybillMapper.fromCreateRequest(request);
+        EWaybill ewaybill = new EWaybill();
         ewaybill.setCreatedBy(currentUser);
         ewaybill.setCustomer(customer);
+        eWaybillMapper.updateFromRequest(request, ewaybill);
 
-        // DÜZELTME: Rota ID'si geldiyse, rotayı bul ve plakasını set et
         if (request.getRouteId() != null) {
             Route route = routeRepository.findById(request.getRouteId())
                     .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + request.getRouteId()));
             ewaybill.setPlateNumber(route.getPlaka());
-            log.info("Route found for e-waybill: {}, Plate number set to: {}", route.getId(), route.getPlaka());
         }
         try {
             ewaybill.setDeliveryAddressJson(objectMapper.writeValueAsString(customer.getAddress()));
@@ -118,9 +101,7 @@ public class EWaybillService {
         }
 
         Set<EWaybillItem> items = processItems(request.getItems(), ewaybill);
-        ewaybill.setItems(items);
-
-        calculateAndSetTotals(ewaybill);
+        ewaybill.getItems().addAll(items);
 
         EWaybill savedEWaybill = eWaybillRepository.save(ewaybill);
         return eWaybillMapper.toResponseDto(savedEWaybill);
@@ -137,23 +118,19 @@ public class EWaybillService {
 
         validateIssueDate(ewaybill.getCustomer(), request.getIssueDate());
 
-
         eWaybillMapper.updateFromRequest(request, ewaybill);
 
-        // DÜZELTME: Rota ID'si geldiyse, rotayı bul ve plakasını set et
         if (request.getRouteId() != null) {
             Route route = routeRepository.findById(request.getRouteId())
                     .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + request.getRouteId()));
             ewaybill.setPlateNumber(route.getPlaka());
         } else {
-            ewaybill.setPlateNumber(null); // Rota kaldırıldıysa plakayı da temizle
+            ewaybill.setPlateNumber(null);
         }
 
         ewaybill.getItems().clear();
         Set<EWaybillItem> updatedItems = processItems(request.getItems(), ewaybill);
         ewaybill.getItems().addAll(updatedItems);
-
-        calculateAndSetTotals(ewaybill);
 
         EWaybill updated = eWaybillRepository.save(ewaybill);
         return eWaybillMapper.toResponseDto(updated);
@@ -182,39 +159,61 @@ public class EWaybillService {
             item.setProductNameSnapshot(product.getName());
             item.setQuantity(itemDto.getQuantity());
 
-            BigDecimal unitPrice = itemDto.getUnitPrice() != null ? itemDto.getUnitPrice() : BigDecimal.ZERO;
-            item.setUnitPrice(unitPrice);
-
             String unitCode = "C62";
             if (product.getUnit() != null && StringUtils.hasText(product.getUnit().getCode())) {
                 unitCode = product.getUnit().getCode();
             }
             item.setUnitCode(unitCode);
-
-            BigDecimal lineAmount = itemDto.getQuantity().multiply(unitPrice);
-            item.setLineAmount(lineAmount.setScale(2, RoundingMode.HALF_UP));
-
-            item.setVatRate(product.getVatRate());
-            BigDecimal vatAmount = lineAmount.multiply(BigDecimal.valueOf(product.getVatRate())).divide(new BigDecimal(100));
-            item.setVatAmount(vatAmount.setScale(2, RoundingMode.HALF_UP));
-
             items.add(item);
         }
         return items;
     }
 
-    private void calculateAndSetTotals(EWaybill ewaybill) {
-        BigDecimal totalAmountWithoutVat = BigDecimal.ZERO;
-        BigDecimal totalVatAmount = BigDecimal.ZERO;
+    @Transactional
+    public List<EWaybillResponse> createEWaybillsFromTemplates(BulkEWaybillFromTemplateRequest request) {
+        User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        List<EWaybillResponse> createdEWaybills = new ArrayList<>();
 
-        for (EWaybillItem item : ewaybill.getItems()) {
-            totalAmountWithoutVat = totalAmountWithoutVat.add(item.getLineAmount());
-            totalVatAmount = totalVatAmount.add(item.getVatAmount());
+        for (Long customerId : request.getCustomerIds()) {
+            Customer customer = customerRepository.findById(customerId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+            validateIssueDate(customer, request.getIssueDate());
         }
 
-        ewaybill.setTotalAmountWithoutVat(totalAmountWithoutVat.setScale(2, RoundingMode.HALF_UP));
-        ewaybill.setTotalVatAmount(totalVatAmount.setScale(2, RoundingMode.HALF_UP));
-        ewaybill.setTotalAmountWithVat(totalAmountWithoutVat.add(totalVatAmount).setScale(2, RoundingMode.HALF_UP));
+        for (Long customerId : request.getCustomerIds()) {
+            Customer customer = customerRepository.findById(customerId).get();
+            EWaybillTemplate template = eWaybillTemplateRepository.findByCustomerId(customerId)
+                    .orElseThrow(() -> new IllegalStateException("Template not found for customer: " + customer.getName()));
+
+            EWaybill ewaybill = new EWaybill();
+            ewaybill.setCreatedBy(currentUser);
+            ewaybill.setCustomer(customer);
+
+            ewaybill.setIssueDate(request.getIssueDate());
+            ewaybill.setIssueTime(request.getIssueTime());
+            ewaybill.setShipmentDate(request.getShipmentDate());
+
+            ewaybill.setNotes(template.getNotes());
+            ewaybill.setCarrierName(template.getCarrierName());
+            ewaybill.setCarrierVknTckn(template.getCarrierVknTckn());
+            ewaybill.setPlateNumber(template.getPlateNumber());
+
+            template.getItems().forEach(templateItem -> {
+                EWaybillItem newItem = new EWaybillItem();
+                newItem.setEWaybill(ewaybill);
+                newItem.setProduct(templateItem.getProduct());
+                newItem.setProductNameSnapshot(templateItem.getProductNameSnapshot());
+                newItem.setQuantity(templateItem.getQuantity());
+                newItem.setUnitCode(templateItem.getUnitCode());
+                ewaybill.getItems().add(newItem);
+            });
+
+            EWaybill savedEWaybill = eWaybillRepository.save(ewaybill);
+            createdEWaybills.add(eWaybillMapper.toResponseDto(savedEWaybill));
+            log.info("E-Waybill (from template) created for customer {} by user {}", customerId, currentUser.getUsername());
+        }
+
+        return createdEWaybills;
     }
 
     @Transactional
@@ -271,8 +270,6 @@ public class EWaybillService {
         if (taxInfo == null) throw new IllegalStateException("Customer tax info is required to send an e-waybill.");
         if (address == null) throw new IllegalStateException("Customer address is required to send an e-waybill.");
 
-
-        // DİNAMİK ALIAS MANTIĞI
         EWaybillCustomerInfo customerInfo = eWaybillCustomerInfoRepository.findById(customer.getId())
                 .orElseThrow(() -> new IllegalStateException("E-Waybill info for customer " + customer.getName() + " is not configured."));
 
@@ -286,9 +283,7 @@ public class EWaybillService {
         TurkcellApiRequest.AddressBook addressBook = new TurkcellApiRequest.AddressBook();
         addressBook.setIdentificationNumber(taxInfo.getTaxNumber());
         addressBook.setName(customer.getName());
-        addressBook.setAlias(targetAlias); // DİNAMİK DEĞERİ ATA
-
-
+        addressBook.setAlias(targetAlias);
         addressBook.setReceiverCity(address.getProvince());
         addressBook.setReceiverDistrict(address.getDistrict());
         addressBook.setReceiverCountry("Türkiye");
@@ -348,58 +343,13 @@ public class EWaybillService {
         List<TurkcellApiRequest.DespatchLine> despatchLines = new ArrayList<>();
         for (EWaybillItem item : ewaybill.getItems()) {
             TurkcellApiRequest.DespatchLine line = new TurkcellApiRequest.DespatchLine();
-
             line.setProductName(item.getProductNameSnapshot());
             line.setAmount(item.getQuantity());
             line.setUnitCode(item.getUnitCode());
-
-            if (item.getUnitPrice() != null && item.getUnitPrice().compareTo(BigDecimal.ZERO) > 0) {
-                line.setUnitPrice(item.getUnitPrice());
-                line.setLineAmount(item.getLineAmount());
-                line.setManufacturersItemIdentification(item.getProduct().getId().toString());
-
-                TurkcellApiRequest.TaxSubTotal lineTaxSubTotal = new TurkcellApiRequest.TaxSubTotal();
-                lineTaxSubTotal.setTaxableAmount(item.getLineAmount());
-                lineTaxSubTotal.setTaxAmount(item.getVatAmount());
-                lineTaxSubTotal.setPercent(item.getVatRate());
-
-                TurkcellApiRequest.TaxTotal lineTaxTotal = new TurkcellApiRequest.TaxTotal();
-                lineTaxTotal.setTaxAmount(item.getVatAmount());
-                lineTaxTotal.setTaxSubTotals(List.of(lineTaxSubTotal));
-
-                line.setLineTaxTotal(lineTaxTotal);
-            }
-
+            line.setManufacturersItemIdentification(item.getProduct().getId().toString());
             despatchLines.add(line);
         }
         request.setDespatchLines(despatchLines);
-
-        Map<Integer, BigDecimal> vatRateToTaxableAmountMap = ewaybill.getItems().stream()
-                .collect(Collectors.groupingBy(
-                        EWaybillItem::getVatRate,
-                        Collectors.mapping(EWaybillItem::getLineAmount, Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))
-                ));
-
-        List<TurkcellApiRequest.TaxSubTotal> taxSubTotals = new ArrayList<>();
-        for (Map.Entry<Integer, BigDecimal> entry : vatRateToTaxableAmountMap.entrySet()) {
-            Integer vatRate = entry.getKey();
-            BigDecimal taxableAmount = entry.getValue();
-            BigDecimal taxAmount = taxableAmount.multiply(BigDecimal.valueOf(vatRate)).divide(new BigDecimal(100));
-
-            TurkcellApiRequest.TaxSubTotal subTotal = new TurkcellApiRequest.TaxSubTotal();
-            subTotal.setPercent(vatRate);
-            subTotal.setTaxableAmount(taxableAmount.setScale(2, RoundingMode.HALF_UP));
-            subTotal.setTaxAmount(taxAmount.setScale(2, RoundingMode.HALF_UP));
-            taxSubTotals.add(subTotal);
-        }
-
-        TurkcellApiRequest.TaxTotal totalTax = new TurkcellApiRequest.TaxTotal();
-        totalTax.setTaxAmount(ewaybill.getTotalVatAmount());
-        totalTax.setTaxSubTotals(taxSubTotals);
-        request.setTaxTotal(totalTax);
-
-        request.getGeneralInfo().setPayableAmount(ewaybill.getTotalAmountWithVat());
-        request.getGeneralInfo().setTotalAmount(ewaybill.getTotalAmountWithoutVat());
 
         return request;
     }
@@ -472,110 +422,28 @@ public class EWaybillService {
         return turkcellClient.getEWaybillAsHtml(ewaybill.getTurkcellApiId());
     }
 
-    // YENİ YARDIMCI METOT
     private void validateIssueDate(Customer customer, java.time.LocalDate issueDate) {
         Set<DayOfWeek> irsaliyeGunleri = customer.getIrsaliyeGunleri();
         if (irsaliyeGunleri != null && !irsaliyeGunleri.isEmpty()) {
-            java.time.DayOfWeek dayOfWeek = issueDate.getDayOfWeek(); // Java'nın kendi DayOfWeek enum'ı
+            java.time.DayOfWeek dayOfWeek = issueDate.getDayOfWeek();
 
-            // Java'nın DayOfWeek'ını bizim kendi DayOfWeek enum'ımıza çevir
             DayOfWeek bizimDayOfWeek;
             try {
                 bizimDayOfWeek = DayOfWeek.valueOf(dayOfWeek.name());
             } catch (IllegalArgumentException e) {
-                // Bu durum normalde yaşanmaz ama güvenlik için
                 throw new IllegalStateException("Invalid day of week: " + dayOfWeek.name());
             }
 
             if (!irsaliyeGunleri.contains(bizimDayOfWeek)) {
                 String dayName = dayOfWeek.getDisplayName(TextStyle.FULL, new Locale("tr", "TR"));
                 throw new IllegalArgumentException(
-                        "İrsaliye oluşturma başarısız: Seçilen tarih (" + dayName + ") müşterinin irsaliye günlerinden biri değil."
+                        "'" + customer.getName() + "' için irsaliye oluşturulamaz: Seçilen tarih (" + dayName + ") müşterinin irsaliye günlerinden biri değil."
                 );
             }
         } else {
-            // Eğer müşterinin irsaliye günü tanımlanmamışsa, hiçbir gün irsaliye kesilemez.
             throw new IllegalArgumentException(
-                    "İrsaliye oluşturma başarısız: Bu müşteri için herhangi bir irsaliye günü tanımlanmamış."
+                    "'" + customer.getName() + "' için irsaliye oluşturulamaz: Bu müşteri için herhangi bir irsaliye günü tanımlanmamış."
             );
         }
     }
-
-    // YENİ METOT
-    @Transactional
-    public List<EWaybillResponse> createEWaybillsFromTemplates(BulkEWaybillFromTemplateRequest request) {
-        User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        List<EWaybillResponse> createdEWaybills = new ArrayList<>();
-
-        for (Long customerId : request.getCustomerIds()) {
-            Customer customer = customerRepository.findById(customerId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
-            validateIssueDate(customer, request.getIssueDate());
-        }
-
-        for (Long customerId : request.getCustomerIds()) {
-            Customer customer = customerRepository.findById(customerId).get();
-            EWaybillTemplate template = eWaybillTemplateRepository.findByCustomerId(customerId)
-                    .orElseThrow(() -> new IllegalStateException("Template not found for customer: " + customer.getName()));
-
-            EWaybill ewaybill = new EWaybill();
-            ewaybill.setCreatedBy(currentUser);
-            ewaybill.setCustomer(customer);
-
-            ewaybill.setIssueDate(request.getIssueDate());
-            ewaybill.setIssueTime(request.getIssueTime());
-            ewaybill.setShipmentDate(request.getShipmentDate());
-
-            ewaybill.setNotes(template.getNotes());
-            ewaybill.setCarrierName(template.getCarrierName());
-            ewaybill.setCarrierVknTckn(template.getCarrierVknTckn());
-            ewaybill.setPlateNumber(template.getPlateNumber());
-
-            // --- YENİ MANTIK ---
-            // Şablonda fiyat alanları dahil edilmemişse, tutarları 0 olarak ayarla.
-            boolean includePrices = template.getIncludedFields() != null && template.getIncludedFields().contains("unitPrice");
-            if (includePrices) {
-                ewaybill.setTotalAmountWithoutVat(template.getTotalAmountWithoutVat());
-                ewaybill.setTotalVatAmount(template.getTotalVatAmount());
-                ewaybill.setTotalAmountWithVat(template.getTotalAmountWithVat());
-            } else {
-                ewaybill.setTotalAmountWithoutVat(BigDecimal.ZERO);
-                ewaybill.setTotalVatAmount(BigDecimal.ZERO);
-                ewaybill.setTotalAmountWithVat(BigDecimal.ZERO);
-            }
-            // --- YENİ MANTIK SONU ---
-
-            template.getItems().forEach(templateItem -> {
-                EWaybillItem newItem = new EWaybillItem();
-                newItem.setEWaybill(ewaybill);
-                newItem.setProduct(templateItem.getProduct());
-                newItem.setProductNameSnapshot(templateItem.getProductNameSnapshot());
-                newItem.setQuantity(templateItem.getQuantity());
-                newItem.setUnitCode(templateItem.getUnitCode());
-
-                // --- YENİ MANTIK ---
-                if (includePrices) {
-                    newItem.setUnitPrice(templateItem.getUnitPrice());
-                    newItem.setLineAmount(templateItem.getLineAmount());
-                    newItem.setVatRate(templateItem.getVatRate());
-                    newItem.setVatAmount(templateItem.getVatAmount());
-                } else {
-                    newItem.setUnitPrice(BigDecimal.ZERO);
-                    newItem.setLineAmount(BigDecimal.ZERO);
-                    newItem.setVatRate(templateItem.getVatRate()); // KDV oranı kalabilir, tutar 0 olacak
-                    newItem.setVatAmount(BigDecimal.ZERO);
-                }
-                // --- YENİ MANTIK SONU ---
-                ewaybill.getItems().add(newItem);
-            });
-
-            EWaybill savedEWaybill = eWaybillRepository.save(ewaybill);
-            createdEWaybills.add(eWaybillMapper.toResponseDto(savedEWaybill));
-            log.info("E-Waybill (from template) created for customer {} by user {}", customerId, currentUser.getUsername());
-        }
-
-        return createdEWaybills;
-    }
-
-
 }

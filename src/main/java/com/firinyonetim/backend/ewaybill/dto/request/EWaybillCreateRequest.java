@@ -1,3 +1,4 @@
+// src/main/java/com/firinyonetim/backend/ewaybill/dto/request/EWaybillCreateRequest.java
 package com.firinyonetim.backend.ewaybill.dto.request;
 
 import jakarta.validation.Valid;
@@ -17,7 +18,7 @@ public class EWaybillCreateRequest {
     @NotNull(message = "Müşteri ID'si boş olamaz.")
     private Long customerId;
 
-    private Long routeId; // YENİ ALAN: İsteğe bağlı rota ID'si
+    private Long routeId;
 
     @NotNull(message = "İrsaliye tarihi boş olamaz.")
     private LocalDate issueDate;
@@ -37,21 +38,7 @@ public class EWaybillCreateRequest {
     @NotBlank(message = "Taşıyıcı VKN/TCKN'si boş olamaz.")
     private String carrierVknTckn;
 
-    // @NotEmpty(message = "İrsaliye en az bir kalem içermelidir.")
+    @NotEmpty(message = "İrsaliye en az bir kalem içermelidir.")
     @Valid
     private Set<EWaybillItemRequest> items;
-
-    @Valid   // YENİ
-    private EWaybillFieldConfig fieldConfig; // YENİ ALAN
-
-
-    // YENİ İÇ SINIF
-    @Data
-    public static class EWaybillFieldConfig {
-        private boolean includeProductCode = true;
-        private boolean includeUnitPrice = true;
-        private boolean includeVat = true;
-        private boolean includeTotals = true;
-    }
-
 }

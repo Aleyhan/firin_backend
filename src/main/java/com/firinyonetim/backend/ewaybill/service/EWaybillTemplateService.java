@@ -21,8 +21,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.Set;
 
 @Slf4j
@@ -70,17 +68,9 @@ public class EWaybillTemplateService {
         templateMapper.updateFromRequest(request, template);
         template.setLastUpdatedBy(currentUser);
 
-        // --- YENİ: includedFields koleksiyonunu manuel olarak yönet ---
-        template.getIncludedFields().clear();
-        if (request.getIncludedFields() != null) {
-            template.getIncludedFields().addAll(request.getIncludedFields());
-        }
-        // --- YENİ KOD SONU ---
-
         template.getItems().clear();
 
         processTemplateItems(request.getItems(), template);
-        calculateAndSetTotals(template);
 
         EWaybillTemplate savedTemplate = templateRepository.save(template);
         log.info("E-Waybill template for customer {} saved/updated by user {}", template.getCustomer().getId(), currentUser.getUsername());
@@ -96,7 +86,6 @@ public class EWaybillTemplateService {
             item.setProduct(product);
             item.setProductNameSnapshot(product.getName());
             item.setQuantity(itemDto.getQuantity());
-            item.setUnitPrice(itemDto.getUnitPrice());
 
             String unitCode = "C62";
             if (product.getUnit() != null && StringUtils.hasText(product.getUnit().getCode())) {
@@ -104,28 +93,7 @@ public class EWaybillTemplateService {
             }
             item.setUnitCode(unitCode);
 
-            BigDecimal lineAmount = itemDto.getQuantity().multiply(itemDto.getUnitPrice());
-            item.setLineAmount(lineAmount.setScale(2, RoundingMode.HALF_UP));
-
-            item.setVatRate(product.getVatRate());
-            BigDecimal vatAmount = lineAmount.multiply(BigDecimal.valueOf(product.getVatRate())).divide(new BigDecimal(100));
-            item.setVatAmount(vatAmount.setScale(2, RoundingMode.HALF_UP));
-
             template.addItem(item);
         }
-    }
-
-    private void calculateAndSetTotals(EWaybillTemplate template) {
-        BigDecimal totalAmountWithoutVat = BigDecimal.ZERO;
-        BigDecimal totalVatAmount = BigDecimal.ZERO;
-
-        for (EWaybillTemplateItem item : template.getItems()) {
-            totalAmountWithoutVat = totalAmountWithoutVat.add(item.getLineAmount());
-            totalVatAmount = totalVatAmount.add(item.getVatAmount());
-        }
-
-        template.setTotalAmountWithoutVat(totalAmountWithoutVat.setScale(2, RoundingMode.HALF_UP));
-        template.setTotalVatAmount(totalVatAmount.setScale(2, RoundingMode.HALF_UP));
-        template.setTotalAmountWithVat(totalAmountWithoutVat.add(totalVatAmount).setScale(2, RoundingMode.HALF_UP));
     }
 }
