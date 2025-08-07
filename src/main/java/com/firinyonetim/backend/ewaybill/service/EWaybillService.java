@@ -35,6 +35,12 @@ import java.time.format.TextStyle; // YENİ IMPORT
 import java.util.Locale; // YENİ IMPORT
 import java.util.Set; // YENİ IMPORT
 
+import com.firinyonetim.backend.ewaybill.dto.request.BulkEWaybillFromTemplateRequest; // YENİ
+import com.firinyonetim.backend.ewaybill.entity.EWaybillTemplate; // YENİ
+import com.firinyonetim.backend.ewaybill.repository.EWaybillTemplateRepository; // YENİ
+import java.util.ArrayList; // YENİ
+import java.util.List; // YENİ
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -58,6 +64,7 @@ public class EWaybillService {
     private final EWaybillMapper eWaybillMapper;
     private final ObjectMapper objectMapper;
     private final EWaybillCustomerInfoRepository eWaybillCustomerInfoRepository;
+    private final EWaybillTemplateRepository eWaybillTemplateRepository;
 
     @Value("${ewaybill.sender.vkn}")
     private String senderVkn;
@@ -493,5 +500,69 @@ public class EWaybillService {
             );
         }
     }
+
+    // YENİ METOT
+    @Transactional
+    public List<EWaybillResponse> createEWaybillsFromTemplates(BulkEWaybillFromTemplateRequest request) {
+        User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        List<EWaybillResponse> createdEWaybills = new ArrayList<>();
+
+        // --- YENİ VALIDASYON BLOĞU ---
+        for (Long customerId : request.getCustomerIds()) {
+            Customer customer = customerRepository.findById(customerId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+            // Daha önce tekli irsaliye için yazdığımız validasyon metodunu burada da kullanıyoruz.
+            validateIssueDate(customer, request.getIssueDate());
+        }
+        // --- VALIDASYON BLOĞU SONU ---
+
+        for (Long customerId : request.getCustomerIds()) {
+            Customer customer = customerRepository.findById(customerId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+
+            EWaybillTemplate template = eWaybillTemplateRepository.findByCustomerId(customerId)
+                    .orElseThrow(() -> new IllegalStateException("Template not found for customer: " + customer.getName()));
+
+            EWaybill ewaybill = new EWaybill();
+            ewaybill.setCreatedBy(currentUser);
+            ewaybill.setCustomer(customer);
+
+            // Tarihleri request'ten al
+            ewaybill.setIssueDate(request.getIssueDate());
+            ewaybill.setIssueTime(request.getIssueTime());
+            ewaybill.setShipmentDate(request.getShipmentDate());
+
+            // Bilgileri şablondan kopyala
+            ewaybill.setNotes(template.getNotes());
+            ewaybill.setCarrierName(template.getCarrierName());
+            ewaybill.setCarrierVknTckn(template.getCarrierVknTckn());
+            ewaybill.setPlateNumber(template.getPlateNumber());
+            ewaybill.setTotalAmountWithoutVat(template.getTotalAmountWithoutVat());
+            ewaybill.setTotalVatAmount(template.getTotalVatAmount());
+            ewaybill.setTotalAmountWithVat(template.getTotalAmountWithVat());
+
+            // Item'ları şablondan kopyala
+            template.getItems().forEach(templateItem -> {
+                EWaybillItem newItem = new EWaybillItem();
+                newItem.setEWaybill(ewaybill);
+                newItem.setProduct(templateItem.getProduct());
+                newItem.setProductNameSnapshot(templateItem.getProductNameSnapshot());
+                newItem.setQuantity(templateItem.getQuantity());
+                newItem.setUnitCode(templateItem.getUnitCode());
+                newItem.setUnitPrice(templateItem.getUnitPrice());
+                newItem.setLineAmount(templateItem.getLineAmount());
+                newItem.setVatRate(templateItem.getVatRate());
+                newItem.setVatAmount(templateItem.getVatAmount());
+                ewaybill.getItems().add(newItem);
+            });
+
+            EWaybill savedEWaybill = eWaybillRepository.save(ewaybill);
+            createdEWaybills.add(eWaybillMapper.toResponseDto(savedEWaybill));
+            log.info("E-Waybill (from template) created for customer {} by user {}", customerId, currentUser.getUsername());
+        }
+
+        return createdEWaybills;
+    }
+
 
 }

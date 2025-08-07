@@ -1,5 +1,6 @@
 package com.firinyonetim.backend.ewaybill.controller;
 
+import com.firinyonetim.backend.ewaybill.dto.request.BulkEWaybillFromTemplateRequest;
 import com.firinyonetim.backend.ewaybill.dto.request.EWaybillCreateRequest;
 import com.firinyonetim.backend.ewaybill.dto.response.EWaybillResponse;
 import com.firinyonetim.backend.ewaybill.service.EWaybillService;
@@ -87,4 +88,14 @@ public class EWaybillController {
         String htmlContent = eWaybillService.getEWaybillHtml(id);
         return ResponseEntity.ok(htmlContent);
     }
+
+    // YENİ ENDPOINT
+    @PostMapping("/create-from-templates")
+    @PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER', 'MUHASEBE')")
+    public ResponseEntity<List<EWaybillResponse>> createFromTemplates(@Valid @RequestBody BulkEWaybillFromTemplateRequest request) {
+        List<EWaybillResponse> responses = eWaybillService.createEWaybillsFromTemplates(request);
+        return new ResponseEntity<>(responses, HttpStatus.CREATED);
+    }
+
+
 }
