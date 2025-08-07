@@ -30,6 +30,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 
+import com.firinyonetim.backend.entity.DayOfWeek; // YENİ IMPORT
+import java.time.format.TextStyle; // YENİ IMPORT
+import java.util.Locale; // YENİ IMPORT
+import java.util.Set; // YENİ IMPORT
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -85,6 +90,8 @@ public class EWaybillService {
         Customer customer = customerRepository.findById(request.getCustomerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + request.getCustomerId()));
 
+        validateIssueDate(customer, request.getIssueDate());
+
         EWaybill ewaybill = eWaybillMapper.fromCreateRequest(request);
         ewaybill.setCreatedBy(currentUser);
         ewaybill.setCustomer(customer);
@@ -120,6 +127,9 @@ public class EWaybillService {
         if (ewaybill.getStatus() != EWaybillStatus.DRAFT && ewaybill.getStatus() != EWaybillStatus.API_ERROR) {
             throw new IllegalStateException("Only e-waybills in DRAFT or API_ERROR status can be updated.");
         }
+
+        validateIssueDate(ewaybill.getCustomer(), request.getIssueDate());
+
 
         eWaybillMapper.updateFromRequest(request, ewaybill);
 
@@ -454,4 +464,34 @@ public class EWaybillService {
         }
         return turkcellClient.getEWaybillAsHtml(ewaybill.getTurkcellApiId());
     }
+
+    // YENİ YARDIMCI METOT
+    private void validateIssueDate(Customer customer, java.time.LocalDate issueDate) {
+        Set<DayOfWeek> irsaliyeGunleri = customer.getIrsaliyeGunleri();
+        if (irsaliyeGunleri != null && !irsaliyeGunleri.isEmpty()) {
+            java.time.DayOfWeek dayOfWeek = issueDate.getDayOfWeek(); // Java'nın kendi DayOfWeek enum'ı
+
+            // Java'nın DayOfWeek'ını bizim kendi DayOfWeek enum'ımıza çevir
+            DayOfWeek bizimDayOfWeek;
+            try {
+                bizimDayOfWeek = DayOfWeek.valueOf(dayOfWeek.name());
+            } catch (IllegalArgumentException e) {
+                // Bu durum normalde yaşanmaz ama güvenlik için
+                throw new IllegalStateException("Invalid day of week: " + dayOfWeek.name());
+            }
+
+            if (!irsaliyeGunleri.contains(bizimDayOfWeek)) {
+                String dayName = dayOfWeek.getDisplayName(TextStyle.FULL, new Locale("tr", "TR"));
+                throw new IllegalArgumentException(
+                        "İrsaliye oluşturma başarısız: Seçilen tarih (" + dayName + ") müşterinin irsaliye günlerinden biri değil."
+                );
+            }
+        } else {
+            // Eğer müşterinin irsaliye günü tanımlanmamışsa, hiçbir gün irsaliye kesilemez.
+            throw new IllegalArgumentException(
+                    "İrsaliye oluşturma başarısız: Bu müşteri için herhangi bir irsaliye günü tanımlanmamış."
+            );
+        }
+    }
+
 }
