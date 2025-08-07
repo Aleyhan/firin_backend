@@ -29,5 +29,6 @@ public interface EWaybillTemplateMapper {
     @Mapping(target = "totalAmountWithoutVat", ignore = true)
     @Mapping(target = "totalVatAmount", ignore = true)
     @Mapping(target = "totalAmountWithVat", ignore = true)
+    @Mapping(target = "includedFields", ignore = true) // YENİ: Bu alanı manuel yöneteceğiz.
     void updateFromRequest(EWaybillTemplateRequest dto, @MappingTarget EWaybillTemplate template);
 }

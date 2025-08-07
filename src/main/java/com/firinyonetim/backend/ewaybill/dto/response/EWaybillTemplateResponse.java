@@ -14,6 +14,7 @@ public class EWaybillTemplateResponse {
     private String carrierName;
     private String carrierVknTckn;
     private String plateNumber;
+    private Set<String> includedFields; // YENİ ALAN
     private BigDecimal totalAmountWithoutVat;
     private BigDecimal totalVatAmount;
     private BigDecimal totalAmountWithVat;

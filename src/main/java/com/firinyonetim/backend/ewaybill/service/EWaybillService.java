@@ -507,19 +507,14 @@ public class EWaybillService {
         User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         List<EWaybillResponse> createdEWaybills = new ArrayList<>();
 
-        // --- YENİ VALIDASYON BLOĞU ---
         for (Long customerId : request.getCustomerIds()) {
             Customer customer = customerRepository.findById(customerId)
                     .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
-            // Daha önce tekli irsaliye için yazdığımız validasyon metodunu burada da kullanıyoruz.
             validateIssueDate(customer, request.getIssueDate());
         }
-        // --- VALIDASYON BLOĞU SONU ---
 
         for (Long customerId : request.getCustomerIds()) {
-            Customer customer = customerRepository.findById(customerId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
-
+            Customer customer = customerRepository.findById(customerId).get();
             EWaybillTemplate template = eWaybillTemplateRepository.findByCustomerId(customerId)
                     .orElseThrow(() -> new IllegalStateException("Template not found for customer: " + customer.getName()));
 
@@ -527,21 +522,29 @@ public class EWaybillService {
             ewaybill.setCreatedBy(currentUser);
             ewaybill.setCustomer(customer);
 
-            // Tarihleri request'ten al
             ewaybill.setIssueDate(request.getIssueDate());
             ewaybill.setIssueTime(request.getIssueTime());
             ewaybill.setShipmentDate(request.getShipmentDate());
 
-            // Bilgileri şablondan kopyala
             ewaybill.setNotes(template.getNotes());
             ewaybill.setCarrierName(template.getCarrierName());
             ewaybill.setCarrierVknTckn(template.getCarrierVknTckn());
             ewaybill.setPlateNumber(template.getPlateNumber());
-            ewaybill.setTotalAmountWithoutVat(template.getTotalAmountWithoutVat());
-            ewaybill.setTotalVatAmount(template.getTotalVatAmount());
-            ewaybill.setTotalAmountWithVat(template.getTotalAmountWithVat());
 
-            // Item'ları şablondan kopyala
+            // --- YENİ MANTIK ---
+            // Şablonda fiyat alanları dahil edilmemişse, tutarları 0 olarak ayarla.
+            boolean includePrices = template.getIncludedFields() != null && template.getIncludedFields().contains("unitPrice");
+            if (includePrices) {
+                ewaybill.setTotalAmountWithoutVat(template.getTotalAmountWithoutVat());
+                ewaybill.setTotalVatAmount(template.getTotalVatAmount());
+                ewaybill.setTotalAmountWithVat(template.getTotalAmountWithVat());
+            } else {
+                ewaybill.setTotalAmountWithoutVat(BigDecimal.ZERO);
+                ewaybill.setTotalVatAmount(BigDecimal.ZERO);
+                ewaybill.setTotalAmountWithVat(BigDecimal.ZERO);
+            }
+            // --- YENİ MANTIK SONU ---
+
             template.getItems().forEach(templateItem -> {
                 EWaybillItem newItem = new EWaybillItem();
                 newItem.setEWaybill(ewaybill);
@@ -549,10 +552,20 @@ public class EWaybillService {
                 newItem.setProductNameSnapshot(templateItem.getProductNameSnapshot());
                 newItem.setQuantity(templateItem.getQuantity());
                 newItem.setUnitCode(templateItem.getUnitCode());
-                newItem.setUnitPrice(templateItem.getUnitPrice());
-                newItem.setLineAmount(templateItem.getLineAmount());
-                newItem.setVatRate(templateItem.getVatRate());
-                newItem.setVatAmount(templateItem.getVatAmount());
+
+                // --- YENİ MANTIK ---
+                if (includePrices) {
+                    newItem.setUnitPrice(templateItem.getUnitPrice());
+                    newItem.setLineAmount(templateItem.getLineAmount());
+                    newItem.setVatRate(templateItem.getVatRate());
+                    newItem.setVatAmount(templateItem.getVatAmount());
+                } else {
+                    newItem.setUnitPrice(BigDecimal.ZERO);
+                    newItem.setLineAmount(BigDecimal.ZERO);
+                    newItem.setVatRate(templateItem.getVatRate()); // KDV oranı kalabilir, tutar 0 olacak
+                    newItem.setVatAmount(BigDecimal.ZERO);
+                }
+                // --- YENİ MANTIK SONU ---
                 ewaybill.getItems().add(newItem);
             });
 

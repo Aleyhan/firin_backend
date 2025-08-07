@@ -70,6 +70,13 @@ public class EWaybillTemplateService {
         templateMapper.updateFromRequest(request, template);
         template.setLastUpdatedBy(currentUser);
 
+        // --- YENİ: includedFields koleksiyonunu manuel olarak yönet ---
+        template.getIncludedFields().clear();
+        if (request.getIncludedFields() != null) {
+            template.getIncludedFields().addAll(request.getIncludedFields());
+        }
+        // --- YENİ KOD SONU ---
+
         template.getItems().clear();
 
         processTemplateItems(request.getItems(), template);

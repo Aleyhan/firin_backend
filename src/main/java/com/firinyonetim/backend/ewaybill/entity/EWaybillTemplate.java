@@ -14,19 +14,17 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.UUID; // YENİ IMPORT
+import java.util.UUID;
 
 @Data
 @Entity
 @Table(name = "e_waybill_templates")
 public class EWaybillTemplate {
 
-    // --- DEĞİŞİKLİK 1: ID tipi UUID oldu ---
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    // --- DEĞİŞİKLİK 2: Standart OneToOne ilişki ---
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id", nullable = false, unique = true)
     private Customer customer;
@@ -41,6 +39,12 @@ public class EWaybillTemplate {
     private String carrierName;
     private String carrierVknTckn;
     private String plateNumber;
+
+    // YENİ ALAN
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "e_waybill_template_included_fields", joinColumns = @JoinColumn(name = "template_id"))
+    @Column(name = "field_name")
+    private Set<String> includedFields = new HashSet<>();
 
     @Column(nullable = false, precision = 18, scale = 2)
     private BigDecimal totalAmountWithoutVat = BigDecimal.ZERO;
