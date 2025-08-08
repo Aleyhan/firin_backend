@@ -24,43 +24,61 @@ public class EWaybillUtilityService {
 
     private final TransactionRepository transactionRepository;
 
+    // Metot imzası güncellendi: `includeReturns` parametresi eklendi
     @Transactional(readOnly = true)
-    public List<TransactionProductSummaryDto> getDailyTransactionSummary(Long customerId) {
+    public List<TransactionProductSummaryDto> getDailyTransactionSummary(Long customerId, boolean includeReturns) {
         LocalDate today = LocalDate.now();
         List<Transaction> transactions = transactionRepository.findApprovedTransactionsByCustomerAndDate(
                 customerId,
                 today.atStartOfDay(),
                 today.atTime(LocalTime.MAX)
         );
-        return summarizeTransactions(transactions);
+        return summarizeTransactions(transactions, includeReturns);
     }
 
+    // Metot imzası güncellendi: `includeReturns` parametresi eklendi
     @Transactional(readOnly = true)
-    public List<TransactionProductSummaryDto> getSummaryByTransactionIds(List<Long> transactionIds) {
+    public List<TransactionProductSummaryDto> getSummaryByTransactionIds(List<Long> transactionIds, boolean includeReturns) {
         List<Transaction> transactions = transactionRepository.findAllById(transactionIds);
         List<Transaction> approvedTransactions = transactions.stream()
                 .filter(t -> t.getStatus() == com.firinyonetim.backend.entity.TransactionStatus.APPROVED)
                 .collect(Collectors.toList());
-        return summarizeTransactions(approvedTransactions);
+        return summarizeTransactions(approvedTransactions, includeReturns);
     }
 
-    private List<TransactionProductSummaryDto> summarizeTransactions(List<Transaction> transactions) {
-        Map<Long, BigDecimal> productQuantities = transactions.stream()
-                .flatMap(transaction -> transaction.getItems().stream())
-                .collect(Collectors.groupingBy(
-                        item -> item.getProduct().getId(),
-                        Collectors.reducing(
-                                BigDecimal.ZERO,
-                                // --- DEĞİŞİKLİK BURADA ---
-                                // int olan quantity'yi BigDecimal'e çevirip işlemi yapıyoruz.
-                                item -> {
-                                    BigDecimal quantity = BigDecimal.valueOf(item.getQuantity());
-                                    return item.getType() == ItemType.SATIS ? quantity : quantity.negate();
-                                },
-                                // --- DEĞİŞİKLİK SONU ---
-                                BigDecimal::add
-                        )
-                ));
+    // Metot imzası güncellendi: `includeReturns` parametresi eklendi
+    private List<TransactionProductSummaryDto> summarizeTransactions(List<Transaction> transactions, boolean includeReturns) {
+        Map<Long, BigDecimal> productQuantities;
+
+        if (includeReturns) {
+            // İadeleri DAHİL ET (Satışlardan Düş)
+            productQuantities = transactions.stream()
+                    .flatMap(transaction -> transaction.getItems().stream())
+                    .collect(Collectors.groupingBy(
+                            item -> item.getProduct().getId(),
+                            Collectors.reducing(
+                                    BigDecimal.ZERO,
+                                    item -> {
+                                        BigDecimal quantity = BigDecimal.valueOf(item.getQuantity());
+                                        return item.getType() == ItemType.SATIS ? quantity : quantity.negate();
+                                    },
+                                    BigDecimal::add
+                            )
+                    ));
+        } else {
+            // İadeleri DAHİL ETME (Sadece Satışları Topla)
+            productQuantities = transactions.stream()
+                    .flatMap(transaction -> transaction.getItems().stream())
+                    .filter(item -> item.getType() == ItemType.SATIS)
+                    .collect(Collectors.groupingBy(
+                            item -> item.getProduct().getId(),
+                            Collectors.reducing(
+                                    BigDecimal.ZERO,
+                                    item -> BigDecimal.valueOf(item.getQuantity()),
+                                    BigDecimal::add
+                            )
+                    ));
+        }
 
         return productQuantities.entrySet().stream()
                 .filter(entry -> entry.getValue().compareTo(BigDecimal.ZERO) > 0)

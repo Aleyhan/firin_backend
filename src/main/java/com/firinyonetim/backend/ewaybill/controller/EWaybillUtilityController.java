@@ -29,15 +29,23 @@ public class EWaybillUtilityController {
     private final TransactionRepository transactionRepository;
     private final TransactionMapper transactionMapper;
 
+    // Endpoint güncellendi: `includeReturns` request param'ı eklendi
     @GetMapping("/daily-summary/{customerId}")
-    public ResponseEntity<List<TransactionProductSummaryDto>> getDailySummary(@PathVariable Long customerId) {
-        return ResponseEntity.ok(ewaybillUtilityService.getDailyTransactionSummary(customerId));
+    public ResponseEntity<List<TransactionProductSummaryDto>> getDailySummary(
+            @PathVariable Long customerId,
+            @RequestParam(defaultValue = "false") boolean includeReturns) {
+        return ResponseEntity.ok(ewaybillUtilityService.getDailyTransactionSummary(customerId, includeReturns));
     }
 
+    // Endpoint güncellendi: `includeReturns` request param'ı eklendi
+    // --- DEĞİŞİKLİK BURADA ---
     @PostMapping("/summary-by-transactions")
-    public ResponseEntity<List<TransactionProductSummaryDto>> getSummaryByTransactions(@Valid @RequestBody TransactionsByIdsRequest request) {
-        return ResponseEntity.ok(ewaybillUtilityService.getSummaryByTransactionIds(request.getTransactionIds()));
+    public ResponseEntity<List<TransactionProductSummaryDto>> getSummaryByTransactions(
+            @Valid @RequestBody TransactionsByIdsRequest request) {
+        // Artık @RequestParam yok, tüm bilgi request nesnesinden geliyor.
+        return ResponseEntity.ok(ewaybillUtilityService.getSummaryByTransactionIds(request.getTransactionIds(), request.isIncludeReturns()));
     }
+    // --- DEĞİŞİKLİK SONU ---
 
     // İşlem seçme modal'ı için o günkü işlemleri getiren endpoint
     @GetMapping("/daily-transactions/{customerId}")

@@ -10,4 +10,5 @@ import java.util.List;
 public class TransactionsByIdsRequest {
     @NotEmpty
     private List<Long> transactionIds;
+    private boolean includeReturns = false; // YENİ ALAN (varsayılan değer false)
 }
