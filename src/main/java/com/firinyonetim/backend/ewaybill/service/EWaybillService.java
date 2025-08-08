@@ -183,7 +183,7 @@ public class EWaybillService {
         for (Long customerId : request.getCustomerIds()) {
             Customer customer = customerRepository.findById(customerId).get();
             EWaybillTemplate template = eWaybillTemplateRepository.findByCustomerId(customerId)
-                    .orElseThrow(() -> new IllegalStateException("Template not found for customer: " + customer.getName()));
+                    .orElseThrow(() -> new IllegalStateException("Şablon bulunamadı, Müşteri: " + customer.getName()));
 
             EWaybill ewaybill = new EWaybill();
             ewaybill.setCreatedBy(currentUser);

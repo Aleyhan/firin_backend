@@ -12,6 +12,7 @@ import com.firinyonetim.backend.dto.customer.response.LastPaymentDateResponse;
 import com.firinyonetim.backend.dto.tax_info.request.TaxInfoRequest;
 import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
 import com.firinyonetim.backend.entity.*;
+import com.firinyonetim.backend.ewaybill.repository.EWaybillTemplateRepository;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.mapper.*;
 import com.firinyonetim.backend.repository.*;
@@ -52,6 +53,8 @@ public class CustomerService {
     private final TaxInfoMapper taxInfoMapper;
     private final TransactionRepository transactionRepository;
     private final TransactionMapper transactionMapper;
+    private final EWaybillTemplateRepository ewaybillTemplateRepository; // YENİ REPOSITORY
+
 
 
     @Transactional(readOnly = true)
@@ -91,6 +94,12 @@ public class CustomerService {
 
         List<Long> customerIds = customersOnPage.stream().map(Customer::getId).collect(Collectors.toList());
 
+        // YENİ: Şablonu olan müşteri ID'lerini al
+        Set<Long> customerIdsWithTemplate = ewaybillTemplateRepository.findByCustomerIdIn(customerIds).stream()
+                .map(template -> template.getCustomer().getId())
+                .collect(Collectors.toSet());
+
+
         List<RouteAssignment> allAssignments = routeAssignmentRepository.findAllWithDetails();
         Map<Long, List<Long>> customerToRouteIdsMap = allAssignments.stream()
                 .collect(groupingBy(
@@ -109,6 +118,9 @@ public class CustomerService {
             CustomerResponse response = customerMapper.toCustomerResponse(customer);
             response.setRouteIds(customerToRouteIdsMap.getOrDefault(customer.getId(), Collections.emptyList()));
             response.setLastPaymentDate(lastPaymentDateMap.get(customer.getId()));
+            // YENİ: Alanı doldur
+            response.setHasEWaybillTemplate(customerIdsWithTemplate.contains(customer.getId()));
+
             return response;
         });
 
@@ -120,6 +132,10 @@ public class CustomerService {
         List<Customer> customers = customerRepository.findAll();
         List<RouteAssignment> allAssignments = routeAssignmentRepository.findAll();
 
+        Set<Long> customerIdsWithTemplate = ewaybillTemplateRepository.findAll().stream()
+                .map(template -> template.getCustomer().getId())
+                .collect(Collectors.toSet());
+
         Map<Long, List<Long>> customerToRouteIdsMap = allAssignments.stream()
                 .collect(groupingBy(
                         assignment -> assignment.getCustomer().getId(),
@@ -130,6 +146,9 @@ public class CustomerService {
                 .map(customer -> {
                     CustomerResponse response = customerMapper.toCustomerResponse(customer);
                     response.setRouteIds(customerToRouteIdsMap.getOrDefault(customer.getId(), List.of()));
+                    // YENİ: Alanı doldur
+                    response.setHasEWaybillTemplate(customerIdsWithTemplate.contains(customer.getId()));
+
                     return response;
                 })
                 .collect(Collectors.toList());

@@ -96,4 +96,15 @@ public class EWaybillTemplateService {
             template.addItem(item);
         }
     }
+
+    @Transactional
+    public void deleteTemplate(Long customerId) {
+        if (!templateRepository.existsByCustomerId(customerId)) {
+            throw new ResourceNotFoundException("Template not found for customer id: " + customerId);
+        }
+        // DÜZELTME: Daha basit ve doğru silme metodu
+        templateRepository.deleteByCustomerId(customerId);
+        log.info("E-Waybill template for customer {} deleted.", customerId);
+    }
+
 }

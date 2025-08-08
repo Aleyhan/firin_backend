@@ -29,6 +29,9 @@ public class CustomerResponse {
     private Set<DayOfWeek> irsaliyeGunleri;
     private List<Long> routeIds;
     private List<TransactionResponse> ledger;
+    // YENİ ALAN
+    private boolean hasEWaybillTemplate;
+
 
     // YENİ ALAN
     private LocalDateTime lastPaymentDate;

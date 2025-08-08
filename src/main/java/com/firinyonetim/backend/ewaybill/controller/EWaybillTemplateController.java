@@ -37,4 +37,12 @@ public class EWaybillTemplateController {
             @Valid @RequestBody EWaybillTemplateRequest request) {
         return ResponseEntity.ok(templateService.updateTemplate(customerId, request));
     }
+
+    // YENİ ENDPOINT
+    @DeleteMapping
+    public ResponseEntity<Void> deleteTemplate(@PathVariable Long customerId) {
+        templateService.deleteTemplate(customerId);
+        return ResponseEntity.noContent().build();
+    }
+
 }
