@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.Optional;
 import java.util.Set;
 
 @Slf4j
@@ -33,12 +34,16 @@ public class EWaybillTemplateService {
     private final ProductRepository productRepository;
     private final EWaybillTemplateMapper templateMapper;
 
+    // --- DEĞİŞİKLİK BURADA BAŞLIYOR ---
     @Transactional(readOnly = true)
-    public EWaybillTemplateResponse getTemplateByCustomerId(Long customerId) {
-        EWaybillTemplate template = templateRepository.findByCustomerId(customerId)
-                .orElseThrow(() -> new ResourceNotFoundException("E-Waybill template not found for customer id: " + customerId));
-        return templateMapper.toResponse(template);
+    public Optional<EWaybillTemplateResponse> getTemplateByCustomerId(Long customerId) {
+        // Artık ResourceNotFoundException fırlatmıyor.
+        // Bunun yerine Optional<EWaybillTemplate> bulup, varsa DTO'ya map'liyor.
+        return templateRepository.findByCustomerId(customerId)
+                .map(templateMapper::toResponse);
     }
+    // --- DEĞİŞİKLİK BURADA BİTİYOR ---
+
 
     @Transactional
     public EWaybillTemplateResponse createTemplate(Long customerId, EWaybillTemplateRequest request) {

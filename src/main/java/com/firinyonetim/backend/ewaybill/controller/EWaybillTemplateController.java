@@ -19,10 +19,18 @@ public class EWaybillTemplateController {
 
     private final EWaybillTemplateService templateService;
 
+    // --- DEĞİŞİKLİK BURADA BAŞLIYOR ---
     @GetMapping
     public ResponseEntity<EWaybillTemplateResponse> getTemplate(@PathVariable Long customerId) {
-        return ResponseEntity.ok(templateService.getTemplateByCustomerId(customerId));
+        // Servisten dönen Optional'ı kontrol et.
+        // Varsa, içindeki DTO'yu 200 OK ile dön.
+        // Yoksa, boş bir body ile 200 OK dön.
+        return templateService.getTemplateByCustomerId(customerId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.ok().build());
     }
+    // --- DEĞİŞİKLİK BURADA BİTİYOR ---
+
 
     @PostMapping
     public ResponseEntity<EWaybillTemplateResponse> createTemplate(
