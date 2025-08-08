@@ -40,6 +40,7 @@ public class TurkcellApiRequest {
     private OrderInfo orderInfo;
 
     @Data
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class GeneralInfo {
         private String issueDate;
         private String issueTime;
@@ -47,6 +48,7 @@ public class TurkcellApiRequest {
         private String currencyCode = "TRY";
         @JsonProperty("DespatchType")
         private int despatchType = 1;
+        private String prefix = "D03";
     }
 
     @Data
