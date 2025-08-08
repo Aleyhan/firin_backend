@@ -21,9 +21,11 @@ public class EWaybillCreateRequest {
     private Long routeId;
 
     @NotNull(message = "İrsaliye tarihi boş olamaz.")
+    @FutureOrPresent(message = "İrsaliye tarihi geçmiş bir tarih olamaz.")
     private LocalDate issueDate;
 
     @NotNull(message = "İrsaliye saati boş olamaz.")
+    @FutureOrPresent(message = "İrsaliye tarihi geçmiş bir tarih olamaz.")
     private LocalTime issueTime;
 
     @NotNull(message = "Sevk tarihi boş olamaz.")

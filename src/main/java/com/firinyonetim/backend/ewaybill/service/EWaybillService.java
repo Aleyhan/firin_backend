@@ -29,6 +29,8 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.TextStyle;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -225,6 +227,11 @@ public class EWaybillService {
         if (ewaybill.getStatus() != EWaybillStatus.DRAFT && ewaybill.getStatus() != EWaybillStatus.API_ERROR) {
             throw new IllegalStateException("Only e-waybills in DRAFT or API_ERROR status can be sent.");
         }
+
+        // --- YENİ: VALIDASYON ÇAĞRISI BURAYA EKLENDİ ---
+        validateEWaybillDates(ewaybill.getIssueDate(), ewaybill.getIssueTime(), ewaybill.getShipmentDate());
+        // --- VALIDASYON ÇAĞRISI SONU ---
+
 
         TurkcellApiRequest request = buildTurkcellRequest(ewaybill);
 
@@ -446,4 +453,20 @@ public class EWaybillService {
             );
         }
     }
+
+    // --- VALIDASYON METODU BURADA KALIYOR ---
+    private void validateEWaybillDates(LocalDate issueDate, LocalTime issueTime, LocalDateTime shipmentDate) {
+        LocalDateTime issueDateTime = issueDate.atTime(issueTime);
+
+        // Kural 1: Sevk tarihi, irsaliye tarihinden önce olamaz.
+        if (shipmentDate.isBefore(issueDateTime)) {
+            throw new IllegalArgumentException("Sevk tarihi, irsaliye tarihinden önce olamaz.");
+        }
+
+        // Kural 2: İrsaliye tarihi bugün ise, irsaliye saati geçmiş bir saat olamaz.
+        if (issueDate.isEqual(LocalDate.now()) && issueTime.isBefore(LocalTime.now().minusMinutes(2))) {
+            throw new IllegalArgumentException("İrsaliye saati taslakta geçmiş kalmış, bu gönderim saatiyle uyuşmuyor.");
+        }
+    }
+
 }
