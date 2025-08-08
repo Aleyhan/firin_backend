@@ -1,7 +1,9 @@
 package com.firinyonetim.backend.ewaybill.controller;
 
 import com.firinyonetim.backend.ewaybill.dto.request.BulkEWaybillFromTemplateRequest;
+import com.firinyonetim.backend.ewaybill.dto.request.BulkSendRequest;
 import com.firinyonetim.backend.ewaybill.dto.request.EWaybillCreateRequest;
+import com.firinyonetim.backend.ewaybill.dto.response.BulkSendResponseDto;
 import com.firinyonetim.backend.ewaybill.dto.response.EWaybillResponse;
 import com.firinyonetim.backend.ewaybill.service.EWaybillService;
 import jakarta.validation.Valid;
@@ -95,6 +97,14 @@ public class EWaybillController {
     public ResponseEntity<List<EWaybillResponse>> createFromTemplates(@Valid @RequestBody BulkEWaybillFromTemplateRequest request) {
         List<EWaybillResponse> responses = eWaybillService.createEWaybillsFromTemplates(request);
         return new ResponseEntity<>(responses, HttpStatus.CREATED);
+    }
+
+    // YENİ ENDPOINT
+    @PostMapping("/send-bulk")
+    @PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER', 'MUHASEBE')")
+    public ResponseEntity<BulkSendResponseDto> sendBulkEWaybills(@Valid @RequestBody BulkSendRequest request) {
+        BulkSendResponseDto response = eWaybillService.sendBulkEWaybills(request);
+        return ResponseEntity.ok(response);
     }
 
 

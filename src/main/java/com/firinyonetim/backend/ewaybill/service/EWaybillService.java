@@ -28,6 +28,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 
+import com.firinyonetim.backend.ewaybill.dto.request.BulkSendRequest;
+import com.firinyonetim.backend.ewaybill.dto.response.BulkSendResponseDto;
+import com.firinyonetim.backend.ewaybill.dto.response.BulkSendResultDto;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -218,53 +222,13 @@ public class EWaybillService {
         return createdEWaybills;
     }
 
+    // GÜNCELLENDİ: Eski `sendEWaybill` metodu artık `sendSingleEWaybill`'i çağırıyor.
     @Transactional
     public void sendEWaybill(UUID ewaybillId) {
-        log.info("Sending e-waybill with internal id: {}", ewaybillId);
-        EWaybill ewaybill = eWaybillRepository.findById(ewaybillId)
-                .orElseThrow(() -> new ResourceNotFoundException("EWaybill not found with id: " + ewaybillId));
-
-        if (ewaybill.getStatus() != EWaybillStatus.DRAFT && ewaybill.getStatus() != EWaybillStatus.API_ERROR) {
-            throw new IllegalStateException("Only e-waybills in DRAFT or API_ERROR status can be sent.");
-        }
-
-        // --- YENİ: VALIDASYON ÇAĞRISI BURAYA EKLENDİ ---
-        validateEWaybillDates(ewaybill.getIssueDate(), ewaybill.getIssueTime(), ewaybill.getShipmentDate());
-        // --- VALIDASYON ÇAĞRISI SONU ---
-
-
-        TurkcellApiRequest request = buildTurkcellRequest(ewaybill);
-
-        try {
-            TurkcellApiResponse response = turkcellClient.createEWaybill(request);
-
-            ewaybill.setTurkcellApiId(response.getId());
-            ewaybill.setEwaybillNumber(response.getDespatchAdviceNumber() != null ? response.getDespatchAdviceNumber() : response.getDespatchNumber());
-            ewaybill.setStatus(EWaybillStatus.SENDING);
-            ewaybill.setTurkcellStatus(response.getStatus());
-            ewaybill.setStatusMessage("Successfully queued for sending.");
-
-            eWaybillRepository.save(ewaybill);
-            log.info("E-waybill {} successfully sent to Turkcell API. Turkcell ID: {}", ewaybillId, response.getId());
-
-        } catch (HttpClientErrorException e) {
-            String responseBody = e.getResponseBodyAsString();
-            log.error("Error sending e-waybill {} to Turkcell API. Status: {}, Body: {}", ewaybillId, e.getStatusCode(), responseBody);
-
-            ewaybill.setStatus(EWaybillStatus.API_ERROR);
-            ewaybill.setStatusMessage(responseBody);
-            eWaybillRepository.save(ewaybill);
-
-            throw new RuntimeException(responseBody, e);
-
-        } catch (Exception e) {
-            log.error("Generic error sending e-waybill {} to Turkcell API: {}", ewaybillId, e.getMessage());
-
-            ewaybill.setStatus(EWaybillStatus.API_ERROR);
-            ewaybill.setStatusMessage("Failed to send to Turkcell API: " + e.getMessage());
-            eWaybillRepository.save(ewaybill);
-
-            throw new RuntimeException("Failed to send e-waybill to Turkcell API.", e);
+        BulkSendResultDto result = sendSingleEWaybill(ewaybillId);
+        if (!result.isSuccess()) {
+            // Hata varsa, exception fırlatarak eski davranışla uyumlu kalmasını sağla
+            throw new RuntimeException(result.getMessage());
         }
     }
 
@@ -428,6 +392,65 @@ public class EWaybillService {
         }
         return turkcellClient.getEWaybillAsHtml(ewaybill.getTurkcellApiId());
     }
+
+    // GÜNCELLENDİ: Bu metot artık `private` ve bir sonuç nesnesi dönüyor.
+    private BulkSendResultDto sendSingleEWaybill(UUID ewaybillId) {
+        EWaybill ewaybill = eWaybillRepository.findById(ewaybillId)
+                .orElse(null);
+
+        if (ewaybill == null) {
+            return new BulkSendResultDto(ewaybillId, null, false, "İrsaliye bulunamadı.");
+        }
+
+        try {
+            if (ewaybill.getStatus() != EWaybillStatus.DRAFT && ewaybill.getStatus() != EWaybillStatus.API_ERROR) {
+                throw new IllegalStateException("Sadece DRAFT veya API_ERROR durumundaki irsaliyeler gönderilebilir.");
+            }
+            validateEWaybillDates(ewaybill.getIssueDate(), ewaybill.getIssueTime(), ewaybill.getShipmentDate());
+
+            TurkcellApiRequest request = buildTurkcellRequest(ewaybill);
+            TurkcellApiResponse apiResponse = turkcellClient.createEWaybill(request);
+
+            ewaybill.setTurkcellApiId(apiResponse.getId());
+            ewaybill.setEwaybillNumber(apiResponse.getDespatchAdviceNumber() != null ? apiResponse.getDespatchAdviceNumber() : apiResponse.getDespatchNumber());
+            ewaybill.setStatus(EWaybillStatus.SENDING);
+            ewaybill.setTurkcellStatus(apiResponse.getStatus());
+            ewaybill.setStatusMessage("Successfully queued for sending.");
+            eWaybillRepository.save(ewaybill);
+
+            log.info("E-waybill {} successfully sent to Turkcell API. Turkcell ID: {}", ewaybillId, apiResponse.getId());
+            return new BulkSendResultDto(ewaybillId, ewaybill.getEwaybillNumber(), true, "Başarıyla gönderim kuyruğuna alındı.");
+
+        } catch (Exception e) {
+            log.error("Error sending e-waybill {} to Turkcell API: {}", ewaybillId, e.getMessage());
+            if (ewaybill.getStatus() != EWaybillStatus.SENDING) { // Eğer durum değişmediyse API_ERROR olarak işaretle
+                ewaybill.setStatus(EWaybillStatus.API_ERROR);
+                ewaybill.setStatusMessage("Failed to send to Turkcell API: " + e.getMessage());
+                eWaybillRepository.save(ewaybill);
+            }
+            return new BulkSendResultDto(ewaybillId, ewaybill.getEwaybillNumber(), false, e.getMessage());
+        }
+    }
+
+
+    // YENİ: Toplu gönderme metodu
+    @Transactional
+    public BulkSendResponseDto sendBulkEWaybills(BulkSendRequest request) {
+        BulkSendResponseDto response = new BulkSendResponseDto();
+        response.setTotalRequested(request.getEwaybillIds().size());
+
+        for (UUID ewaybillId : request.getEwaybillIds()) {
+            BulkSendResultDto result = sendSingleEWaybill(ewaybillId);
+            response.getResults().add(result);
+            if (result.isSuccess()) {
+                response.setTotalSuccess(response.getTotalSuccess() + 1);
+            } else {
+                response.setTotalFailed(response.getTotalFailed() + 1);
+            }
+        }
+        return response;
+    }
+
 
     private void validateIssueDate(Customer customer, java.time.LocalDate issueDate) {
         Set<DayOfWeek> irsaliyeGunleri = customer.getIrsaliyeGunleri();
