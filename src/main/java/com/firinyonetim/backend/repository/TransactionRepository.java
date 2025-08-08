@@ -100,4 +100,18 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
     @Query("SELECT DISTINCT t.customer.id FROM Transaction t WHERE t.shipment.id = :shipmentId")
     List<Long> findProcessedCustomerIdsByShipmentId(@Param("shipmentId") Long shipmentId);
 
+    // YENİ METOT
+    @Query("SELECT t FROM Transaction t " +
+            "LEFT JOIN FETCH t.items i " +
+            "LEFT JOIN FETCH i.product p " +
+            "LEFT JOIN FETCH p.unit " +
+            "WHERE t.customer.id = :customerId " +
+            "AND t.status = 'APPROVED' " +
+            "AND t.transactionDate >= :startOfDay AND t.transactionDate < :endOfDay")
+    List<Transaction> findApprovedTransactionsByCustomerAndDate(
+            @Param("customerId") Long customerId,
+            @Param("startOfDay") LocalDateTime startOfDay,
+            @Param("endOfDay") LocalDateTime endOfDay
+    );
+
 }
