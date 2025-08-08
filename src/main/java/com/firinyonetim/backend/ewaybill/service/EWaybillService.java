@@ -238,11 +238,11 @@ public class EWaybillService {
         Address address = customer.getAddress();
         TaxInfo taxInfo = customer.getTaxInfo();
 
-        if (taxInfo == null) throw new IllegalStateException("Customer tax info is required to send an e-waybill.");
-        if (address == null) throw new IllegalStateException("Customer address is required to send an e-waybill.");
+        if (taxInfo == null) throw new IllegalStateException("E-irsaliye göndermek için müşteri vergi bilgisi gereklidir.");
+        if (address == null) throw new IllegalStateException("E-irsaliye göndermek için müşteri adresi gereklidir.");
 
         EWaybillCustomerInfo customerInfo = eWaybillCustomerInfoRepository.findById(customer.getId())
-                .orElseThrow(() -> new IllegalStateException("E-Waybill info for customer " + customer.getName() + " is not configured."));
+                .orElseThrow(() -> new IllegalStateException("Müşteri '" + customer.getName() + "' için e-İrsaliye bilgisi yapılandırılmamış."));
 
         String targetAlias;
         if (customerInfo.getRecipientType() == EWaybillRecipientType.REGISTERED_USER) {
@@ -264,7 +264,7 @@ public class EWaybillService {
         deliveryAddress.setCity(address.getProvince());
         deliveryAddress.setDistrict(address.getDistrict());
         deliveryAddress.setCountryName("Türkiye");
-        deliveryAddress.setZipCode("34000");
+        deliveryAddress.setZipCode(address.getZipcode());
         request.setDeliveryAddressInfo(deliveryAddress);
 
         TurkcellApiRequest.DespatchBuyerCustomerInfo buyerInfo = new TurkcellApiRequest.DespatchBuyerCustomerInfo();

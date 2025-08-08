@@ -72,6 +72,7 @@ public class TurkcellApiRequest {
         private String receiverDistrict;
     }
     @Data
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class DeliveryAddressInfo {
         @JsonProperty("District")
         private String district;

@@ -12,7 +12,12 @@ public class Address {
     private Long id;
 
     private String details;
+    @Column(nullable = false)
     private String province;
+    @Column(nullable = false)
     private String district;
+    // YENİ ALAN
+    @Column(nullable = false, length = 10)
+    private String zipcode;
 
 }

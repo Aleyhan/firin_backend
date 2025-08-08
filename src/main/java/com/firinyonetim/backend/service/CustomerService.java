@@ -368,6 +368,7 @@ public class CustomerService {
 
         Address address = customer.getAddress();
         if (address == null) {
+            // Eğer adres yoksa ve güncelleme isteği geldiyse, yeni bir adres oluştur.
             if (updates == null || updates.isEmpty()) {
                 return customerMapper.toCustomerResponse(customer);
             }
@@ -378,7 +379,9 @@ public class CustomerService {
         final Address finalAddress = address;
 
         updates.forEach((key, value) -> {
-            if (value != null && !value.trim().isEmpty()) {
+            // Değerin null olup olmadığını kontrol etmeye devam ediyoruz,
+            // ancak boş string ("") gönderilmesine izin veriyoruz ki bir alan temizlenebilsin.
+            if (value != null) {
                 switch (key) {
                     case "details":
                         finalAddress.setDetails(value);
@@ -389,6 +392,11 @@ public class CustomerService {
                     case "district":
                         finalAddress.setDistrict(value);
                         break;
+                    // --- YENİ CASE EKLENDİ ---
+                    case "zipcode":
+                        finalAddress.setZipcode(value);
+                        break;
+                    // --- YENİ CASE SONU ---
                     default:
                         break;
                 }

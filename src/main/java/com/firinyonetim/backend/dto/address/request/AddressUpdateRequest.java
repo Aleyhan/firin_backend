@@ -8,4 +8,6 @@ public class AddressUpdateRequest {
     private String details;
     private String province;
     private String district;
+    private String zipcode; // YENİ ALAN
+
 }
