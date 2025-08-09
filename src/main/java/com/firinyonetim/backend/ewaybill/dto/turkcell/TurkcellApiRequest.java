@@ -48,7 +48,7 @@ public class TurkcellApiRequest {
         private String currencyCode = "TRY";
         @JsonProperty("DespatchType")
         private int despatchType = 1;
-        private String prefix = "D03";
+        private String prefix = "KEI";
     }
 
     @Data
