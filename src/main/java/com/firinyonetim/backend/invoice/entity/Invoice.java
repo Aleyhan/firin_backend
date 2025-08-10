@@ -26,6 +26,12 @@ public class Invoice {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    // DEĞİŞİKLİK BURADA: @GeneratedValue kaldırıldı, yerine columnDefinition eklendi.
+    @Column(name = "sequential_id", nullable = false, unique = true, updatable = false, insertable = false,
+            columnDefinition = "BIGSERIAL")
+    private Long sequentialId;
+
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;

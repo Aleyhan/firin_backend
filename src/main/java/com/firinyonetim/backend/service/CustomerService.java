@@ -516,10 +516,25 @@ public class CustomerService {
         assignment.setPricingType(request.getPricingType());
         assignment.setSpecialPrice(request.getSpecialPrice());
 
+        // --- YENİ FİYAT HESAPLAMA MANTIĞI ---
+        BigDecimal priceToUse = assignment.getSpecialPrice() != null ? assignment.getSpecialPrice() : product.getBasePrice();
+        BigDecimal vatRate = BigDecimal.valueOf(product.getVatRate()).divide(new BigDecimal("100"));
+        BigDecimal vatMultiplier = BigDecimal.ONE.add(vatRate);
+
+        if (assignment.getPricingType() == PricingType.VAT_INCLUDED) {
+            assignment.setFinalPriceVatIncluded(priceToUse.setScale(4, RoundingMode.HALF_UP));
+            assignment.setFinalPriceVatExclusive(priceToUse.divide(vatMultiplier, 4, RoundingMode.HALF_UP));
+        } else { // VAT_EXCLUSIVE
+            assignment.setFinalPriceVatExclusive(priceToUse.setScale(4, RoundingMode.HALF_UP));
+            assignment.setFinalPriceVatIncluded(priceToUse.multiply(vatMultiplier).setScale(4, RoundingMode.HALF_UP));
+        }
+        // --- HESAPLAMA SONU ---
+
         CustomerProductAssignment savedAssignment = customerProductAssignmentRepository.save(assignment);
         return customerProductAssignmentMapper.toResponse(savedAssignment);
     }
 
+    // DEĞİŞTİRİLEN METOT
     public List<CustomerProductAssignmentResponse> getCustomerProductAssignments(Long customerId) {
         if (!customerRepository.existsById(customerId)) {
             throw new ResourceNotFoundException("Customer not found with id: " + customerId);
@@ -527,29 +542,9 @@ public class CustomerService {
 
         List<CustomerProductAssignment> assignments = customerProductAssignmentRepository.findByCustomerId(customerId);
 
+        // Artık hesaplama yapmaya gerek yok, mapper doğrudan entity'deki yeni alanları DTO'ya çevirecek.
         return assignments.stream()
-                .map(assignment -> {
-                    CustomerProductAssignmentResponse response = customerProductAssignmentMapper.toResponse(assignment);
-
-                    Product product = assignment.getProduct();
-                    BigDecimal priceToUse = assignment.getSpecialPrice() != null ? assignment.getSpecialPrice() : product.getBasePrice();
-
-                    BigDecimal finalPrice;
-                    if (assignment.getPricingType() == PricingType.VAT_INCLUDED) {
-                        finalPrice = priceToUse;
-                    } else {
-                        if (product.getVatRate() == null || product.getVatRate() < 0) {
-                            throw new IllegalStateException("Ürün '" + product.getName() + "' için geçerli bir KDV oranı tanımlanmamış.");
-                        }
-                        BigDecimal vatRate = BigDecimal.valueOf(product.getVatRate()).divide(new BigDecimal("100"));
-                        BigDecimal vatAmount = priceToUse.multiply(vatRate);
-                        finalPrice = priceToUse.add(vatAmount);
-                    }
-
-                    response.setFinalUnitPrice(finalPrice.setScale(2, RoundingMode.HALF_UP));
-
-                    return response;
-                })
+                .map(customerProductAssignmentMapper::toResponse)
                 .collect(Collectors.toList());
     }
 

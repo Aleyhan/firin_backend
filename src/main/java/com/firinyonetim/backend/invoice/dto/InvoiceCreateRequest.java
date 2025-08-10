@@ -1,5 +1,6 @@
 package com.firinyonetim.backend.invoice.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.firinyonetim.backend.invoice.entity.InvoiceProfileType;
 import com.firinyonetim.backend.invoice.entity.InvoiceType;
 import jakarta.validation.Valid;
@@ -23,6 +24,7 @@ public class InvoiceCreateRequest {
     private InvoiceType type;
 
     @NotNull
+    // YENİ ANOTASYON: Gelen ISO string'ini "Europe/Istanbul" saat dilimine göre yorumla.
     private LocalDateTime issueDate;
 
     @NotNull

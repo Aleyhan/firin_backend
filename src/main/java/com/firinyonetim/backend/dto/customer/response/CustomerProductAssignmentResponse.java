@@ -8,12 +8,15 @@ import java.math.BigDecimal;
 public class CustomerProductAssignmentResponse {
     private Long productId;
     private String productName;
-    private String productCode; // YENİ ALAN
-    private String unitCode; // YENİ ALAN
-    private String unitName; // YENİ ALAN
+    private String productCode;
+    private String unitCode;
+    private String unitName;
     private PricingType pricingType;
     private BigDecimal specialPrice;
     private BigDecimal basePrice;
     private Integer vatRate;
-    private BigDecimal finalUnitPrice;
+
+    // DEĞİŞİKLİK: finalUnitPrice kaldırıldı, yerine iki yeni alan geldi
+    private BigDecimal finalPriceVatExclusive;
+    private BigDecimal finalPriceVatIncluded;
 }

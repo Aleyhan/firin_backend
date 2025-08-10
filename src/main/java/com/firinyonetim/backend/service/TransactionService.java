@@ -118,21 +118,21 @@ public class TransactionService {
                     throw new IllegalStateException("Ürün '" + product.getName() + "' bu müşteriye atanmamış. İşlem yapılamaz.");
                 }
 
-                BigDecimal basePrice = (assignment.getSpecialPrice() != null) ? assignment.getSpecialPrice() : product.getBasePrice();
-                BigDecimal finalUnitPrice;
-                if (assignment.getPricingType() == PricingType.VAT_INCLUDED) {
-                    finalUnitPrice = basePrice;
-                } else {
-                    BigDecimal vatRate = BigDecimal.valueOf(product.getVatRate()).divide(new BigDecimal("100"));
-                    finalUnitPrice = basePrice.add(basePrice.multiply(vatRate));
+                // --- DEĞİŞİKLİK BURADA BAŞLIYOR ---
+                // Artık fiyatı yeniden hesaplamak yerine, doğrudan atama tablosundan alıyoruz.
+                BigDecimal finalUnitPrice = assignment.getFinalPriceVatIncluded();
+                if (finalUnitPrice == null) {
+                    // Bu bir güvenlik önlemi, normalde bu durumun oluşmaması gerekir.
+                    throw new IllegalStateException("Ürün '" + product.getName() + "' için müşteriye özel nihai fiyat hesaplanmamış.");
                 }
+                // --- DEĞİŞİKLİK BURADA BİTİYOR ---
 
                 BigDecimal totalPrice = finalUnitPrice.multiply(BigDecimal.valueOf(itemRequest.getQuantity()));
                 TransactionItem item = new TransactionItem();
                 item.setProduct(product);
                 item.setQuantity(itemRequest.getQuantity());
                 item.setType(itemRequest.getType());
-                item.setUnitPrice(finalUnitPrice);
+                item.setUnitPrice(finalUnitPrice); // Birim fiyat olarak KDV Dahil fiyatı kaydediyoruz.
                 item.setTotalPrice(totalPrice);
                 item.setTransaction(transaction);
                 transaction.getItems().add(item);

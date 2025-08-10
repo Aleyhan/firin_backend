@@ -29,13 +29,17 @@ public class CustomerProductAssignment {
     @EqualsAndHashCode.Exclude
     private Product product;
 
-    // Bu atama için fiyatlandırma kuralı (KDV Dahil/Hariç)
     @Enumerated(EnumType.STRING)
     @Column(name = "pricing_type", nullable = false)
-    private PricingType pricingType = PricingType.VAT_EXCLUSIVE; // Varsayılan olarak KDV Hariç
+    private PricingType pricingType = PricingType.VAT_EXCLUSIVE;
 
-    // Bu atama için özel bir fiyat varsa burada tutulur.
-    // Eğer null ise, ürünün standart basePrice'ı geçerlidir.
     @Column(name = "special_price")
     private BigDecimal specialPrice;
+
+    // YENİ ALANLAR: Hesaplanmış nihai fiyatlar
+    @Column(name = "final_price_vat_exclusive", precision = 19, scale = 4)
+    private BigDecimal finalPriceVatExclusive; // KDV Hariç Nihai Fiyat
+
+    @Column(name = "final_price_vat_included", precision = 19, scale = 4)
+    private BigDecimal finalPriceVatIncluded; // KDV Dahil Nihai Fiyat
 }
