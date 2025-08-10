@@ -51,6 +51,9 @@ public class SecurityConfig {
                         // DÜZELTME BURADA: Path pattern'i doğru formata getirildi.
                         // Bu kural, /api/ewaybills/{bir-uuid-degeri}/pdf şeklindeki tüm GET isteklerine izin verir.
                         .requestMatchers(HttpMethod.GET, "/api/ewaybills/{id}/pdf").authenticated()
+                        // YENİ EKLENEN E-FATURA KURALI
+                        .requestMatchers(HttpMethod.GET, "/api/invoices/{id}/pdf", "/api/invoices/{id}/html").authenticated()
+
 
                         // ŞOFÖR İÇİN ÖZEL KURALLAR
                         .requestMatchers("/api/driver/**").hasRole("SOFOR")

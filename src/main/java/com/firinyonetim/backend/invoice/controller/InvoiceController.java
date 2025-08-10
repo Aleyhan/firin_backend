@@ -1,17 +1,22 @@
 package com.firinyonetim.backend.invoice.controller;
 
 import com.firinyonetim.backend.dto.PagedResponseDto;
+import com.firinyonetim.backend.invoice.dto.CalculatedInvoiceItemDto;
+import com.firinyonetim.backend.invoice.dto.EWaybillForInvoiceDto;
 import com.firinyonetim.backend.invoice.dto.InvoiceCreateRequest;
 import com.firinyonetim.backend.invoice.dto.InvoiceResponse;
 import com.firinyonetim.backend.invoice.service.InvoiceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -54,4 +59,36 @@ public class InvoiceController {
     public ResponseEntity<InvoiceResponse> sendInvoice(@PathVariable UUID id) {
         return ResponseEntity.ok(invoiceService.sendInvoice(id));
     }
+
+    // YENİ ENDPOINT
+    @GetMapping(value = "/{id}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> downloadInvoicePdf(@PathVariable UUID id) {
+        byte[] pdfBytes = invoiceService.getInvoicePdf(id);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=e-fatura-" + id + ".pdf");
+        return ResponseEntity.ok().headers(headers).contentType(MediaType.APPLICATION_PDF).body(pdfBytes);
+    }
+
+    // YENİ ENDPOINT
+    @GetMapping(value = "/{id}/html", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> viewInvoiceHtml(@PathVariable UUID id) {
+        String htmlContent = invoiceService.getInvoiceHtml(id);
+        return ResponseEntity.ok(htmlContent);
+    }
+
+    // YENİ ENDPOINT
+    @GetMapping("/unvoiced-ewaybills/{customerId}")
+    public ResponseEntity<List<EWaybillForInvoiceDto>> getUninvoicedEWaybills(@PathVariable Long customerId) {
+        return ResponseEntity.ok(invoiceService.getUninvoicedEWaybills(customerId));
+    }
+
+    // YENİ ENDPOINT
+    @GetMapping("/calculate-items-from-ewaybills")
+    public ResponseEntity<List<CalculatedInvoiceItemDto>> calculateItemsFromEwaybills(
+            @RequestParam Long customerId,
+            @RequestParam List<UUID> ewaybillIds) {
+        return ResponseEntity.ok(invoiceService.calculateItemsFromEwaybills(customerId, ewaybillIds));
+    }
+
+
 }

@@ -1,13 +1,11 @@
 package com.firinyonetim.backend.invoice.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.firinyonetim.backend.dto.PagedResponseDto;
-import com.firinyonetim.backend.entity.Customer;
-import com.firinyonetim.backend.entity.Product;
-import com.firinyonetim.backend.entity.User;
+import com.firinyonetim.backend.entity.*;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
-import com.firinyonetim.backend.invoice.dto.InvoiceCreateRequest;
-import com.firinyonetim.backend.invoice.dto.InvoiceItemRequest;
-import com.firinyonetim.backend.invoice.dto.InvoiceResponse;
+import com.firinyonetim.backend.invoice.dto.*;
 import com.firinyonetim.backend.invoice.dto.turkcell.TurkcellInvoiceRequest;
 import com.firinyonetim.backend.invoice.dto.turkcell.TurkcellInvoiceResponse;
 import com.firinyonetim.backend.invoice.dto.turkcell.TurkcellInvoiceStatusResponse;
@@ -18,8 +16,12 @@ import com.firinyonetim.backend.invoice.entity.InvoiceStatus;
 import com.firinyonetim.backend.invoice.mapper.InvoiceMapper;
 import com.firinyonetim.backend.invoice.mapper.InvoiceTurkcellMapper;
 import com.firinyonetim.backend.invoice.repository.InvoiceRepository;
+import com.firinyonetim.backend.repository.CustomerProductAssignmentRepository;
 import com.firinyonetim.backend.repository.CustomerRepository;
 import com.firinyonetim.backend.repository.ProductRepository;
+import com.firinyonetim.backend.ewaybill.entity.EWaybill;
+import com.firinyonetim.backend.ewaybill.entity.EWaybillItem;
+import com.firinyonetim.backend.ewaybill.repository.EWaybillRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -28,15 +30,13 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 import org.springframework.web.client.HttpClientErrorException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -51,7 +51,11 @@ public class InvoiceService {
     private final InvoiceSettingsService invoiceSettingsService;
     private final InvoiceTurkcellMapper invoiceTurkcellMapper;
     private final TurkcellInvoiceClient turkcellInvoiceClient;
+    private final EWaybillRepository eWaybillRepository;
+    private final ObjectMapper objectMapper;
+    private final CustomerProductAssignmentRepository customerProductAssignmentRepository; // YENİ
 
+    // ... (getAllInvoices, getInvoiceById, createDraftInvoice, updateDraftInvoice, deleteDraftInvoice, sendInvoice, checkAndUpdateStatuses, getInvoicePdf, getInvoiceHtml metotları aynı kalacak) ...
     @Transactional(readOnly = true)
     public PagedResponseDto<InvoiceResponse> getAllInvoices(String status, Pageable pageable) {
         Specification<Invoice> spec = (root, query, cb) -> {
@@ -93,6 +97,8 @@ public class InvoiceService {
         Set<InvoiceItem> items = processInvoiceItems(request.getItems(), invoice);
         invoice.setItems(items);
         calculateTotals(invoice);
+        handleRelatedEWaybills(invoice, request.getRelatedEWaybillIds());
+
 
         Invoice savedInvoice = invoiceRepository.save(invoice);
         log.info("Draft invoice created with id: {}", savedInvoice.getId());
@@ -118,17 +124,42 @@ public class InvoiceService {
         invoice.setCurrencyCode(request.getCurrencyCode());
         invoice.setNotes(request.getNotes());
 
-        // DEĞİŞİKLİK BURADA: Koleksiyonu set etmek yerine, mevcut koleksiyonu temizleyip yenilerini ekliyoruz.
         invoice.getItems().clear();
         Set<InvoiceItem> newItems = processInvoiceItems(request.getItems(), invoice);
         invoice.getItems().addAll(newItems);
 
         calculateTotals(invoice);
+        handleRelatedEWaybills(invoice, request.getRelatedEWaybillIds());
 
         Invoice updatedInvoice = invoiceRepository.save(invoice);
         log.info("Draft invoice updated with id: {}", updatedInvoice.getId());
         return invoiceMapper.toResponse(updatedInvoice);
     }
+
+    private void handleRelatedEWaybills(Invoice invoice, List<UUID> ewaybillIds) {
+        if (CollectionUtils.isEmpty(ewaybillIds)) {
+            invoice.setRelatedDespatchesJson(null);
+            return;
+        }
+
+        List<EWaybill> ewaybills = eWaybillRepository.findAllById(ewaybillIds);
+        List<UUID> foundIds = ewaybills.stream().map(EWaybill::getId).collect(Collectors.toList());
+        if (!new HashSet<>(ewaybillIds).equals(new HashSet<>(foundIds))) {
+            throw new ResourceNotFoundException("Gönderilen irsaliye ID'lerinden bazıları veritabanında bulunamadı.");
+        }
+
+        // DEĞİŞİKLİK: Yeni DTO yapısına göre nesne oluşturuluyor
+        List<EWaybillForInvoiceDto> relatedDespatches = ewaybills.stream()
+                .map(ew -> new EWaybillForInvoiceDto(ew.getId(), ew.getEwaybillNumber(), ew.getIssueDate().atTime(ew.getIssueTime())))
+                .collect(Collectors.toList());
+        try {
+            invoice.setRelatedDespatchesJson(objectMapper.writeValueAsString(relatedDespatches));
+        } catch (JsonProcessingException e) {
+            log.error("Could not serialize related despatches for invoice {}", invoice.getId(), e);
+            invoice.setRelatedDespatchesJson(null);
+        }
+    }
+
 
     @Transactional
     public void deleteDraftInvoice(UUID id) {
@@ -157,7 +188,11 @@ public class InvoiceService {
 
         invoice.setStatus(InvoiceStatus.SENDING);
         invoiceRepository.save(invoice);
-
+try {
+            System.out.println(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(request));
+        } catch (JsonProcessingException e) {
+            System.out.println(request);
+        }
         try {
             TurkcellInvoiceResponse response = turkcellInvoiceClient.createInvoice(request);
             invoice.setTurkcellApiId(response.getId());
@@ -205,15 +240,97 @@ public class InvoiceService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public byte[] getInvoicePdf(UUID id) {
+        Invoice invoice = invoiceRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Invoice not found with id: " + id));
+        if (invoice.getTurkcellApiId() == null) {
+            throw new IllegalStateException("This invoice has not been sent to the provider yet.");
+        }
+        return turkcellInvoiceClient.getInvoiceAsPdf(invoice.getTurkcellApiId());
+    }
+
+    @Transactional(readOnly = true)
+    public String getInvoiceHtml(UUID id) {
+        Invoice invoice = invoiceRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Invoice not found with id: " + id));
+        if (invoice.getTurkcellApiId() == null) {
+            throw new IllegalStateException("This invoice has not been sent to the provider yet.");
+        }
+        return turkcellInvoiceClient.getInvoiceAsHtml(invoice.getTurkcellApiId());
+    }
+
+    @Transactional(readOnly = true)
+    public List<EWaybillForInvoiceDto> getUninvoicedEWaybills(Long customerId) {
+        // DEĞİŞİKLİK: Yeni DTO yapısına göre nesne oluşturuluyor
+        return eWaybillRepository.findUninvoicedEWaybillsByCustomerId(customerId).stream()
+                .map(ew -> new EWaybillForInvoiceDto(ew.getId(), ew.getEwaybillNumber(), ew.getIssueDate().atTime(ew.getIssueTime())))
+                .collect(Collectors.toList());
+    }
+
+
+    // YENİ METOT
+    @Transactional(readOnly = true)
+    public List<CalculatedInvoiceItemDto> calculateItemsFromEwaybills(Long customerId, List<UUID> ewaybillIds) {
+        List<EWaybill> ewaybills = eWaybillRepository.findAllById(ewaybillIds);
+        if (ewaybills.isEmpty()) {
+            throw new IllegalArgumentException("Hesaplama için en az bir geçerli irsaliye seçilmelidir.");
+        }
+
+        if (!ewaybills.stream().allMatch(e -> e.getCustomer().getId().equals(customerId))) {
+            throw new IllegalArgumentException("Seçilen irsaliyeler, belirtilen müşteri ile eşleşmiyor.");
+        }
+
+        Map<Long, CustomerProductAssignment> assignmentsMap = customerProductAssignmentRepository
+                .findByCustomerId(customerId).stream()
+                .collect(Collectors.toMap(cpa -> cpa.getProduct().getId(), Function.identity()));
+
+        Map<Long, BigDecimal> productQuantities = ewaybills.stream()
+                .flatMap(e -> e.getItems().stream())
+                .collect(Collectors.groupingBy(
+                        item -> item.getProduct().getId(),
+                        Collectors.reducing(BigDecimal.ZERO, EWaybillItem::getQuantity, BigDecimal::add)
+                ));
+
+        List<CalculatedInvoiceItemDto> calculatedItems = new ArrayList<>();
+        productQuantities.forEach((productId, quantity) -> {
+            CustomerProductAssignment assignment = assignmentsMap.get(productId);
+            if (assignment == null) {
+                throw new IllegalStateException("İrsaliyedeki bir ürün (" + productId + ") müşteriye atanmamış.");
+            }
+
+            Product product = assignment.getProduct();
+            BigDecimal priceToUse = assignment.getSpecialPrice() != null ? assignment.getSpecialPrice() : product.getBasePrice();
+            BigDecimal vatExclusivePrice;
+
+            if (assignment.getPricingType() == PricingType.VAT_INCLUDED) {
+                BigDecimal vatMultiplier = BigDecimal.ONE.add(BigDecimal.valueOf(product.getVatRate()).divide(BigDecimal.valueOf(100)));
+                vatExclusivePrice = priceToUse.divide(vatMultiplier, 4, RoundingMode.HALF_UP);
+            } else {
+                vatExclusivePrice = priceToUse;
+            }
+
+            CalculatedInvoiceItemDto dto = new CalculatedInvoiceItemDto();
+            dto.setProductId(productId);
+            dto.setProductName(product.getName());
+            dto.setQuantity(quantity.intValue());
+            dto.setUnitPrice(vatExclusivePrice);
+            calculatedItems.add(dto);
+        });
+
+        return calculatedItems;
+    }
+
+
     private void updateStatusFromTurkcellResponse(Invoice invoice, TurkcellInvoiceStatusResponse response) {
         invoice.setTurkcellStatus(response.getStatus());
         invoice.setStatusMessage(response.getMessage());
 
         switch (response.getStatus()) {
-            case 60: // Onaylandı
+            case 60:
                 invoice.setStatus(InvoiceStatus.APPROVED);
                 break;
-            case 40: // Hata
+            case 40:
                 invoice.setStatus(InvoiceStatus.REJECTED_BY_GIB);
                 break;
             default:

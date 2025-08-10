@@ -19,6 +19,8 @@ public class TurkcellInvoiceRequest {
     private AddressBook addressBook;
     private GeneralInfoModel generalInfoModel;
     private List<InvoiceLine> invoiceLines;
+    // YENİ ALAN
+    private List<RelatedDespatch> relatedDespatchList;
 
     @Data
     public static class AddressBook {
@@ -58,5 +60,12 @@ public class TurkcellInvoiceRequest {
         private int vatRate;
         private BigDecimal vatAmount;
         private BigDecimal lineExtensionAmount;
+    }
+
+    // YENİ İÇ SINIF
+    @Data
+    public static class RelatedDespatch {
+        private String despatchNumber;
+        private String issueDate;
     }
 }

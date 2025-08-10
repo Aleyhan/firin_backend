@@ -9,6 +9,7 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID; // YENİ IMPORT
 
 @Data
 public class InvoiceCreateRequest {
@@ -32,4 +33,7 @@ public class InvoiceCreateRequest {
     @NotEmpty
     @Valid
     private List<InvoiceItemRequest> items;
+
+    // YENİ ALAN: Faturaya bağlanacak irsaliye ID'leri
+    private List<UUID> relatedEWaybillIds;
 }

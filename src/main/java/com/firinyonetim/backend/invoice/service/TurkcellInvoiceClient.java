@@ -42,6 +42,20 @@ public class TurkcellInvoiceClient {
         return restTemplate.exchange(url, HttpMethod.GET, entity, TurkcellInvoiceStatusResponse.class).getBody();
     }
 
+    // YENİ METOT
+    public byte[] getInvoiceAsPdf(String turkcellApiId) {
+        String url = baseUrl + "/v2/outboxinvoice/" + turkcellApiId + "/pdf";
+        HttpEntity<Void> entity = new HttpEntity<>(createHeaders());
+        return restTemplate.exchange(url, HttpMethod.GET, entity, byte[].class).getBody();
+    }
+
+    // YENİ METOT
+    public String getInvoiceAsHtml(String turkcellApiId) {
+        String url = baseUrl + "/v2/outboxinvoice/" + turkcellApiId + "/html";
+        HttpEntity<Void> entity = new HttpEntity<>(createHeaders());
+        return restTemplate.exchange(url, HttpMethod.GET, entity, String.class).getBody();
+    }
+
     private HttpHeaders createHeaders() {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);

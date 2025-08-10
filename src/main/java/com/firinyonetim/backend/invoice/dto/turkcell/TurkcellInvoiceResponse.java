@@ -7,9 +7,10 @@ import lombok.Data;
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class TurkcellInvoiceResponse {
-    @JsonProperty("Id")
+    // DEĞİŞİKLİK: @JsonProperty içindeki alan adları PascalCase olarak güncellendi.
+    @JsonProperty("id")
     private String id;
 
-    @JsonProperty("InvoiceNumber")
+    @JsonProperty("invoiceNumber")
     private String invoiceNumber;
 }
