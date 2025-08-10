@@ -1,10 +1,7 @@
 package com.firinyonetim.backend.invoice.controller;
 
 import com.firinyonetim.backend.dto.PagedResponseDto;
-import com.firinyonetim.backend.invoice.dto.CalculatedInvoiceItemDto;
-import com.firinyonetim.backend.invoice.dto.EWaybillForInvoiceDto;
-import com.firinyonetim.backend.invoice.dto.InvoiceCreateRequest;
-import com.firinyonetim.backend.invoice.dto.InvoiceResponse;
+import com.firinyonetim.backend.invoice.dto.*;
 import com.firinyonetim.backend.invoice.service.InvoiceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -82,13 +79,14 @@ public class InvoiceController {
         return ResponseEntity.ok(invoiceService.getUninvoicedEWaybills(customerId));
     }
 
-    // YENİ ENDPOINT
+    // BU METODU BUL VE DÖNÜŞ TİPİNİ GÜNCELLE
     @GetMapping("/calculate-items-from-ewaybills")
-    public ResponseEntity<List<CalculatedInvoiceItemDto>> calculateItemsFromEwaybills(
+    public ResponseEntity<InvoiceCalculationResponse> calculateItemsFromEwaybills(
             @RequestParam Long customerId,
             @RequestParam List<UUID> ewaybillIds) {
         return ResponseEntity.ok(invoiceService.calculateItemsFromEwaybills(customerId, ewaybillIds));
     }
+
 
 
 }

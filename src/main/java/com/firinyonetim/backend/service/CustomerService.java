@@ -57,6 +57,7 @@ public class CustomerService {
 
 
 
+
     @Transactional(readOnly = true)
     public PagedResponseDto<CustomerResponse> searchCustomers(String searchTerm, Long routeId, Boolean status, Pageable pageable) {
         Specification<Customer> spec = (root, query, cb) -> {
@@ -500,6 +501,7 @@ public class CustomerService {
         return customerMapper.toCustomerResponse(updatedCustomer);
     }
 
+    // BU METODU BUL VE İÇERİĞİNİ GÜNCELLE
     @Transactional
     public CustomerProductAssignmentResponse assignOrUpdateProductToCustomer(Long customerId, CustomerProductAssignmentRequest request) {
         Customer customer = customerRepository.findById(customerId)
@@ -511,12 +513,24 @@ public class CustomerService {
                 .findByCustomerIdAndProductId(customerId, request.getProductId())
                 .orElse(new CustomerProductAssignment());
 
+        // Fiyatla ilgili eski değerleri sakla
+        PricingType oldPricingType = assignment.getPricingType();
+        BigDecimal oldSpecialPrice = assignment.getSpecialPrice();
+        boolean isNewAssignment = assignment.getId() == null;
+
         assignment.setCustomer(customer);
         assignment.setProduct(product);
         assignment.setPricingType(request.getPricingType());
         assignment.setSpecialPrice(request.getSpecialPrice());
 
-        // --- YENİ FİYAT HESAPLAMA MANTIĞI ---
+        // Fiyatla ilgili alanlar değişti mi diye kontrol et
+        boolean priceChanged = !Objects.equals(oldPricingType, request.getPricingType()) || !Objects.equals(oldSpecialPrice, request.getSpecialPrice());
+
+        // Yeni atama ise veya fiyat değiştiyse tarihi güncelle
+        if (isNewAssignment || priceChanged) {
+            assignment.setPriceUpdatedAt(LocalDateTime.now());
+        }
+
         BigDecimal priceToUse = assignment.getSpecialPrice() != null ? assignment.getSpecialPrice() : product.getBasePrice();
         BigDecimal vatRate = BigDecimal.valueOf(product.getVatRate()).divide(new BigDecimal("100"));
         BigDecimal vatMultiplier = BigDecimal.ONE.add(vatRate);
@@ -528,7 +542,6 @@ public class CustomerService {
             assignment.setFinalPriceVatExclusive(priceToUse.setScale(4, RoundingMode.HALF_UP));
             assignment.setFinalPriceVatIncluded(priceToUse.multiply(vatMultiplier).setScale(4, RoundingMode.HALF_UP));
         }
-        // --- HESAPLAMA SONU ---
 
         CustomerProductAssignment savedAssignment = customerProductAssignmentRepository.save(assignment);
         return customerProductAssignmentMapper.toResponse(savedAssignment);

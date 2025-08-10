@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Data
 @Entity
@@ -42,4 +43,9 @@ public class CustomerProductAssignment {
 
     @Column(name = "final_price_vat_included", precision = 19, scale = 4)
     private BigDecimal finalPriceVatIncluded; // KDV Dahil Nihai Fiyat
+
+    // YENİ ALAN
+    @Column(name = "price_updated_at")
+    private LocalDateTime priceUpdatedAt;
+
 }

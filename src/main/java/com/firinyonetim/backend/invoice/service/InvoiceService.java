@@ -35,6 +35,7 @@ import org.springframework.web.client.HttpClientErrorException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -269,9 +270,12 @@ try {
     }
 
 
-    // YENİ METOT
+    // BU METODU BUL VE TAMAMEN DEĞİŞTİR
     @Transactional(readOnly = true)
-    public List<CalculatedInvoiceItemDto> calculateItemsFromEwaybills(Long customerId, List<UUID> ewaybillIds) {
+    public InvoiceCalculationResponse calculateItemsFromEwaybills(Long customerId, List<UUID> ewaybillIds) {
+        InvoiceCalculationResponse response = new InvoiceCalculationResponse();
+        Set<String> warnings = new HashSet<>();
+
         List<EWaybill> ewaybills = eWaybillRepository.findAllById(ewaybillIds);
         if (ewaybills.isEmpty()) {
             throw new IllegalArgumentException("Hesaplama için en az bir geçerli irsaliye seçilmelidir.");
@@ -280,6 +284,12 @@ try {
         if (!ewaybills.stream().allMatch(e -> e.getCustomer().getId().equals(customerId))) {
             throw new IllegalArgumentException("Seçilen irsaliyeler, belirtilen müşteri ile eşleşmiyor.");
         }
+
+        // Karşılaştırma için en eski irsaliyenin tarihini bul
+        LocalDateTime oldestEwaybillDateTime = ewaybills.stream()
+                .map(e -> e.getIssueDate().atTime(e.getIssueTime()))
+                .min(LocalDateTime::compareTo)
+                .orElseThrow();
 
         Map<Long, CustomerProductAssignment> assignmentsMap = customerProductAssignmentRepository
                 .findByCustomerId(customerId).stream()
@@ -297,6 +307,15 @@ try {
             CustomerProductAssignment assignment = assignmentsMap.get(productId);
             if (assignment == null) {
                 throw new IllegalStateException("İrsaliyedeki bir ürün (" + productId + ") müşteriye atanmamış.");
+            }
+
+            // FİYAT DEĞİŞİKLİĞİ KONTROLÜ
+            if (assignment.getPriceUpdatedAt() != null && assignment.getPriceUpdatedAt().isAfter(oldestEwaybillDateTime)) {
+                String warningMessage = String.format(
+                        "'%s' ürünü için irsaliye kesim tarihi ile mevcut fiyat uyuşmuyor. Manuel takip önerilir.",
+                        assignment.getProduct().getName()
+                );
+                warnings.add(warningMessage);
             }
 
             Product product = assignment.getProduct();
@@ -318,7 +337,9 @@ try {
             calculatedItems.add(dto);
         });
 
-        return calculatedItems;
+        response.setItems(calculatedItems);
+        response.setWarnings(new ArrayList<>(warnings));
+        return response;
     }
 
 
