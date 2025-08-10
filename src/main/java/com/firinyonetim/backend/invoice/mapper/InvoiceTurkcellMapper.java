@@ -50,6 +50,7 @@ public abstract class InvoiceTurkcellMapper {
     @Mapping(target = "addressBook", expression = "java(mapAddressBook(invoice.getCustomer()))")
     @Mapping(target = "generalInfoModel", expression = "java(mapGeneralInfoModel(invoice, settings))")
     @Mapping(target = "invoiceLines", source = "invoice.items")
+    // @Mapping(target = "paymentMeansModel", expression = "java(mapPaymentMeansModel(invoice, settings))")
     @Mapping(target = "relatedDespatchList", expression = "java(mapRelatedDespatchList(invoice.getRelatedDespatchesJson()))")
     public abstract TurkcellInvoiceRequest toTurkcellRequest(Invoice invoice, InvoiceSettings settings);
 
@@ -58,6 +59,22 @@ public abstract class InvoiceTurkcellMapper {
     @Mapping(source = "product.unit.code", target = "unitCode")
     @Mapping(source = "totalPrice", target = "lineExtensionAmount")
     public abstract TurkcellInvoiceRequest.InvoiceLine toInvoiceLine(InvoiceItem item);
+
+    protected TurkcellInvoiceRequest.PaymentMeansModel mapPaymentMeansModel(Invoice invoice, InvoiceSettings settings) {
+        if (settings.getPaymentMeansCode() == null) {
+            return null;
+        }
+
+        TurkcellInvoiceRequest.PaymentMeansModel model = new TurkcellInvoiceRequest.PaymentMeansModel();
+        model.setPaymentMeansCode(settings.getPaymentMeansCode());
+        model.setPaymentChannelCode(settings.getPaymentChannelCode());
+        model.setInstructionNote(settings.getInstructionNote());
+        model.setPayeeFinancialAccountId(settings.getPayeeFinancialAccountId());
+        model.setPayeeFinancialAccountCurrencyCode(settings.getPayeeFinancialAccountCurrencyCode());
+
+
+        return model;
+    }
 
     protected List<TurkcellInvoiceRequest.RelatedDespatch> mapRelatedDespatchList(String json) {
         if (!StringUtils.hasText(json)) {

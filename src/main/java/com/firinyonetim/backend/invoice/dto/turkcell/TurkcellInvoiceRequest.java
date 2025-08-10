@@ -19,6 +19,7 @@ public class TurkcellInvoiceRequest {
     private AddressBook addressBook;
     private GeneralInfoModel generalInfoModel;
     private List<InvoiceLine> invoiceLines;
+    private PaymentMeansModel paymentMeansModel;
     // YENİ ALAN
     private List<RelatedDespatch> relatedDespatchList;
 
@@ -68,4 +69,15 @@ public class TurkcellInvoiceRequest {
         private String despatchNumber;
         private String issueDate;
     }
+
+    @Data
+    public static class PaymentMeansModel {
+        private String paymentMeansCode;
+        private String paymentDueDate;
+        private String paymentChannelCode;
+        private String instructionNote;
+        private String payeeFinancialAccountId;
+        private String payeeFinancialAccountCurrencyCode;
+    }
+
 }
