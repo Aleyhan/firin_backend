@@ -1,17 +1,23 @@
 package com.firinyonetim.backend.invoice.mapper;
 
 import com.firinyonetim.backend.entity.Customer;
+import com.firinyonetim.backend.ewaybill.entity.EWaybillCustomerInfo;
+import com.firinyonetim.backend.ewaybill.repository.EWaybillCustomerInfoRepository;
 import com.firinyonetim.backend.invoice.dto.turkcell.TurkcellInvoiceRequest;
 import com.firinyonetim.backend.invoice.entity.Invoice;
 import com.firinyonetim.backend.invoice.entity.InvoiceItem;
 import com.firinyonetim.backend.invoice.entity.InvoiceSettings;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.format.DateTimeFormatter;
 
 @Mapper(componentModel = "spring")
 public abstract class InvoiceTurkcellMapper {
+
+    @Autowired
+    private EWaybillCustomerInfoRepository eWaybillCustomerInfoRepository;
 
     protected final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
@@ -33,8 +39,13 @@ public abstract class InvoiceTurkcellMapper {
     public abstract TurkcellInvoiceRequest.InvoiceLine toInvoiceLine(InvoiceItem item);
 
     protected TurkcellInvoiceRequest.AddressBook mapAddressBook(Customer customer) {
+        EWaybillCustomerInfo customerInfo = eWaybillCustomerInfoRepository.findById(customer.getId())
+                .orElseThrow(() -> new IllegalStateException("Müşteri '" + customer.getName() + "' için e-İrsaliye/e-fatura bilgisi yapılandırılmamış."));
+
+
         TurkcellInvoiceRequest.AddressBook addressBook = new TurkcellInvoiceRequest.AddressBook();
         addressBook.setName(customer.getName());
+        addressBook.setAlias(customerInfo.getDefaultAlias());
         addressBook.setIdentificationNumber(customer.getTaxInfo() != null ? customer.getTaxInfo().getTaxNumber() : null);
         addressBook.setReceiverCity(customer.getAddress() != null ? customer.getAddress().getProvince() : null);
         addressBook.setReceiverDistrict(customer.getAddress() != null ? customer.getAddress().getDistrict() : null);

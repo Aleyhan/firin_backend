@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,10 +32,12 @@ import org.springframework.web.client.HttpClientErrorException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -50,8 +53,17 @@ public class InvoiceService {
     private final TurkcellInvoiceClient turkcellInvoiceClient;
 
     @Transactional(readOnly = true)
-    public PagedResponseDto<InvoiceResponse> getAllInvoices(Pageable pageable) {
-        Page<Invoice> invoicePage = invoiceRepository.findAll(pageable);
+    public PagedResponseDto<InvoiceResponse> getAllInvoices(String status, Pageable pageable) {
+        Specification<Invoice> spec = (root, query, cb) -> {
+            if (status != null && !status.isEmpty()) {
+                List<InvoiceStatus> statusList = Arrays.stream(status.split(","))
+                        .map(InvoiceStatus::valueOf)
+                        .collect(Collectors.toList());
+                return root.get("status").in(statusList);
+            }
+            return null;
+        };
+        Page<Invoice> invoicePage = invoiceRepository.findAll(spec, pageable);
         return new PagedResponseDto<>(invoicePage.map(invoiceMapper::toResponse));
     }
 
@@ -106,9 +118,11 @@ public class InvoiceService {
         invoice.setCurrencyCode(request.getCurrencyCode());
         invoice.setNotes(request.getNotes());
 
+        // DEĞİŞİKLİK BURADA: Koleksiyonu set etmek yerine, mevcut koleksiyonu temizleyip yenilerini ekliyoruz.
         invoice.getItems().clear();
-        Set<InvoiceItem> items = processInvoiceItems(request.getItems(), invoice);
-        invoice.setItems(items);
+        Set<InvoiceItem> newItems = processInvoiceItems(request.getItems(), invoice);
+        invoice.getItems().addAll(newItems);
+
         calculateTotals(invoice);
 
         Invoice updatedInvoice = invoiceRepository.save(invoice);
@@ -202,8 +216,6 @@ public class InvoiceService {
             case 40: // Hata
                 invoice.setStatus(InvoiceStatus.REJECTED_BY_GIB);
                 break;
-            // Diğer durumlar (örn: 70 Onay Bekliyor, 80 Reddedildi) şimdilik SENDING olarak kalabilir.
-            // Gerekirse bu case'ler genişletilebilir.
             default:
                 log.info("Invoice {} has Turkcell status: {}. Keeping internal status as SENDING.", invoice.getId(), response.getStatus());
                 break;

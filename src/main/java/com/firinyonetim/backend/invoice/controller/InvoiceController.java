@@ -23,8 +23,10 @@ public class InvoiceController {
     private final InvoiceService invoiceService;
 
     @GetMapping
-    public ResponseEntity<PagedResponseDto<InvoiceResponse>> getAllInvoices(Pageable pageable) {
-        return ResponseEntity.ok(invoiceService.getAllInvoices(pageable));
+    public ResponseEntity<PagedResponseDto<InvoiceResponse>> getAllInvoices(
+            @RequestParam(required = false) String status,
+            Pageable pageable) {
+        return ResponseEntity.ok(invoiceService.getAllInvoices(status, pageable));
     }
 
     @GetMapping("/{id}")
