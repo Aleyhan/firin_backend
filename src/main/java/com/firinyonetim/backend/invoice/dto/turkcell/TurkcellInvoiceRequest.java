@@ -20,8 +20,18 @@ public class TurkcellInvoiceRequest {
     private GeneralInfoModel generalInfoModel;
     private List<InvoiceLine> invoiceLines;
     private PaymentMeansModel paymentMeansModel;
-    // YENİ ALAN
     private List<RelatedDespatch> relatedDespatchList;
+
+    // YENİ EKLENEN ALAN
+    private UblSettingsModel ublSettingsModel;
+
+    // YENİ EKLENEN İÇ SINIF
+    @Data
+    public static class UblSettingsModel {
+        private Boolean useCalculatedVatAmount;
+        private Boolean useCalculatedTotalSummary;
+        private Boolean hideDespatchMessage;
+    }
 
     @Data
     public static class AddressBook {
@@ -63,7 +73,6 @@ public class TurkcellInvoiceRequest {
         private BigDecimal lineExtensionAmount;
     }
 
-    // YENİ İÇ SINIF
     @Data
     public static class RelatedDespatch {
         private String despatchNumber;
