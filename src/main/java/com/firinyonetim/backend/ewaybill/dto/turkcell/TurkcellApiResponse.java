@@ -19,4 +19,7 @@ public class TurkcellApiResponse {
     // Status response'una özel alan
     @JsonProperty("despatchNumber")
     private String despatchNumber;
+
+    @JsonProperty("localReferenceId")
+    private String localReferenceId;
 }

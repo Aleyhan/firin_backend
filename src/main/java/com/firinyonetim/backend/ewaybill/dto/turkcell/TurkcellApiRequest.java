@@ -15,6 +15,9 @@ public class TurkcellApiRequest {
     public void setIsNew(boolean isNew) { this.isNew = isNew; }
     private boolean useManualDespatchAdviceId = false;
 
+    @JsonProperty("localReferenceId")
+    private String localReferenceId;
+
     @JsonProperty("generalInfo")
     private GeneralInfo generalInfo;
 

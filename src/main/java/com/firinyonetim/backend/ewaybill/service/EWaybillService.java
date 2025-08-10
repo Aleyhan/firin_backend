@@ -59,6 +59,8 @@ public class EWaybillService {
     private String senderVkn;
     @Value("${ewaybill.sender.name}")
     private String senderName;
+    @Value("${ewaybill.sender.surname}")
+    private String senderSurname;
     @Value("${ewaybill.sender.city}")
     private String senderCity;
     @Value("${ewaybill.sender.district}")
@@ -234,6 +236,7 @@ public class EWaybillService {
 
     private TurkcellApiRequest buildTurkcellRequest(EWaybill ewaybill) {
         TurkcellApiRequest request = eWaybillMapper.toTurkcellApiRequest(ewaybill);
+        request.setLocalReferenceId(String.valueOf(ewaybill.getId()));
         Customer customer = ewaybill.getCustomer();
         Address address = customer.getAddress();
         TaxInfo taxInfo = customer.getTaxInfo();
@@ -305,7 +308,7 @@ public class EWaybillService {
         TurkcellApiRequest.SellerSupplierInfo sellerInfo = new TurkcellApiRequest.SellerSupplierInfo();
         sellerInfo.setIdentificationNumber(senderVkn);
         sellerInfo.setName(senderName);
-        sellerInfo.setPersonSurName("-");
+        sellerInfo.setPersonSurName(senderSurname);
         sellerInfo.setCity(senderCity);
         sellerInfo.setDistrict(senderDistrict);
         sellerInfo.setCountryName(senderCountry);
@@ -415,9 +418,9 @@ public class EWaybillService {
             ewaybill.setEwaybillNumber(apiResponse.getDespatchAdviceNumber() != null ? apiResponse.getDespatchAdviceNumber() : apiResponse.getDespatchNumber());
             ewaybill.setStatus(EWaybillStatus.SENDING);
             ewaybill.setTurkcellStatus(apiResponse.getStatus());
+
             ewaybill.setStatusMessage("Successfully queued for sending.");
             eWaybillRepository.save(ewaybill);
-
             log.info("E-waybill {} successfully sent to Turkcell API. Turkcell ID: {}", ewaybillId, apiResponse.getId());
             return new BulkSendResultDto(ewaybillId, ewaybill.getEwaybillNumber(), true, "Başarıyla gönderim kuyruğuna alındı.");
 
