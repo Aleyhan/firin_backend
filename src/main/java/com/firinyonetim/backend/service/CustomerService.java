@@ -9,6 +9,7 @@ import com.firinyonetim.backend.dto.customer.request.CustomerUpdateRequest;
 import com.firinyonetim.backend.dto.customer.response.CustomerProductAssignmentResponse;
 import com.firinyonetim.backend.dto.customer.response.CustomerResponse;
 import com.firinyonetim.backend.dto.customer.response.LastPaymentDateResponse;
+import com.firinyonetim.backend.dto.product.response.AffectedCustomerDto;
 import com.firinyonetim.backend.dto.tax_info.request.TaxInfoRequest;
 import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
 import com.firinyonetim.backend.entity.*;
@@ -59,7 +60,7 @@ public class CustomerService {
 
 
     @Transactional(readOnly = true)
-    public PagedResponseDto<CustomerResponse> searchCustomers(String searchTerm, Long routeId, Boolean status, Pageable pageable) {
+    public PagedResponseDto<CustomerResponse> searchCustomers(String searchTerm, Long routeId, Boolean status, Boolean hasSpecialPrice, Pageable pageable) { // YENİ PARAMETRE
         Specification<Customer> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -81,6 +82,15 @@ public class CustomerService {
 
             if (status != null) {
                 predicates.add(cb.equal(root.get("isActive"), status));
+            }
+
+            // YENİ FİLTRELEME MANTIĞI
+            if (Boolean.TRUE.equals(hasSpecialPrice)) {
+                Subquery<Long> subquery = query.subquery(Long.class);
+                Root<CustomerProductAssignment> subRoot = subquery.from(CustomerProductAssignment.class);
+                subquery.select(subRoot.get("customer").get("id"));
+                subquery.where(cb.isNotNull(subRoot.get("specialPrice")));
+                predicates.add(root.get("id").in(subquery));
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));
@@ -575,4 +585,6 @@ public class CustomerService {
         }
         customerProductAssignmentRepository.deleteByCustomerIdAndProductId(customerId, productId);
     }
+
+
 }

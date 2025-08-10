@@ -44,8 +44,9 @@ public class CustomerController {
             @RequestParam(required = false) String searchTerm,
             @RequestParam(required = false) Long routeId,
             @RequestParam(required = false) Boolean status,
+            @RequestParam(required = false) Boolean hasSpecialPrice, // YENİ PARAMETRE
             Pageable pageable) {
-        PagedResponseDto<CustomerResponse> results = customerService.searchCustomers(searchTerm, routeId, status, pageable);
+        PagedResponseDto<CustomerResponse> results = customerService.searchCustomers(searchTerm, routeId, status, hasSpecialPrice, pageable);
         return ResponseEntity.ok(results);
     }
 

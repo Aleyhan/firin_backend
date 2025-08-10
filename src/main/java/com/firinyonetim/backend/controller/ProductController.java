@@ -2,6 +2,7 @@ package com.firinyonetim.backend.controller;
 
 import com.firinyonetim.backend.dto.product.request.ProductCreateRequest;
 import com.firinyonetim.backend.dto.product.request.ProductUpdateRequest;
+import com.firinyonetim.backend.dto.product.response.AffectedCustomerDto;
 import com.firinyonetim.backend.dto.product.response.ProductResponse;
 import com.firinyonetim.backend.service.ProductService;
 import jakarta.validation.Valid;
@@ -46,4 +47,12 @@ public class ProductController {
         productService.deleteProduct(productId);
         return ResponseEntity.noContent().build();
     }
+
+    // YENİ ENDPOINT
+    @GetMapping("/{productId}/customers-with-special-price")
+    public ResponseEntity<List<AffectedCustomerDto>> getCustomersWithSpecialPrice(@PathVariable Long productId) {
+        return ResponseEntity.ok(productService.getCustomersWithSpecialPriceForProduct(productId));
+    }
+
+
 }

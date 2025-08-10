@@ -13,4 +13,6 @@ public interface CustomerProductAssignmentRepository extends JpaRepository<Custo
     void deleteByCustomerIdAndProductId(Long customerId, Long productId);
     List<CustomerProductAssignment> findByCustomerId(Long customerId);
 
+    // YENİ METOT
+    List<CustomerProductAssignment> findByProductIdAndSpecialPriceIsNotNull(Long productId);
 }

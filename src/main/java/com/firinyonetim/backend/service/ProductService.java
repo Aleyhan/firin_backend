@@ -2,12 +2,15 @@ package com.firinyonetim.backend.service;
 
 import com.firinyonetim.backend.dto.product.request.ProductCreateRequest;
 import com.firinyonetim.backend.dto.product.request.ProductUpdateRequest;
+import com.firinyonetim.backend.dto.product.response.AffectedCustomerDto;
 import com.firinyonetim.backend.dto.product.response.ProductResponse;
+import com.firinyonetim.backend.entity.CustomerProductAssignment;
 import com.firinyonetim.backend.entity.Product;
 import com.firinyonetim.backend.entity.ProductGroup;
 import com.firinyonetim.backend.entity.Unit;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.mapper.ProductMapper;
+import com.firinyonetim.backend.repository.CustomerProductAssignmentRepository;
 import com.firinyonetim.backend.repository.ProductGroupRepository;
 import com.firinyonetim.backend.repository.ProductRepository;
 import com.firinyonetim.backend.repository.UnitRepository;
@@ -26,6 +29,7 @@ public class ProductService {
     // DEĞİŞİKLİK: Yeni repository'ler eklendi
     private final ProductGroupRepository productGroupRepository;
     private final UnitRepository unitRepository;
+    private final CustomerProductAssignmentRepository customerProductAssignmentRepository;
 
     @Transactional
     public ProductResponse createProduct(ProductCreateRequest request) {
@@ -91,6 +95,22 @@ public class ProductService {
 
         productRepository.delete(product);
     }
+    // YENİ METOT
+    @Transactional(readOnly = true)
+    public List<AffectedCustomerDto> getCustomersWithSpecialPriceForProduct(Long productId) {
+        List<CustomerProductAssignment> assignments = customerProductAssignmentRepository.findByProductIdAndSpecialPriceIsNotNull(productId);
+
+        return assignments.stream().map(assignment -> {
+            AffectedCustomerDto dto = new AffectedCustomerDto();
+            dto.setCustomerId(assignment.getCustomer().getId());
+            dto.setCustomerCode(assignment.getCustomer().getCustomerCode());
+            dto.setCustomerName(assignment.getCustomer().getName());
+            dto.setSpecialPrice(assignment.getSpecialPrice());
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+
 }
 
 
