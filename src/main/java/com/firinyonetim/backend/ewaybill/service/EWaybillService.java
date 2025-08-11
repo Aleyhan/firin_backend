@@ -32,6 +32,9 @@ import com.firinyonetim.backend.ewaybill.dto.request.BulkSendRequest;
 import com.firinyonetim.backend.ewaybill.dto.response.BulkSendResponseDto;
 import com.firinyonetim.backend.ewaybill.dto.response.BulkSendResultDto;
 
+import com.firinyonetim.backend.ewaybill.dto.turkcell.TurkcellApiRequest.NoteLine; // YENİ IMPORT
+
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -247,6 +250,12 @@ public class EWaybillService {
         EWaybillCustomerInfo customerInfo = eWaybillCustomerInfoRepository.findById(customer.getId())
                 .orElseThrow(() -> new IllegalStateException("Müşteri '" + customer.getName() + "' için e-İrsaliye bilgisi yapılandırılmamış."));
 
+        if (StringUtils.hasText(ewaybill.getNotes())) {
+            TurkcellApiRequest.NoteLine noteLine = new TurkcellApiRequest.NoteLine();
+            noteLine.setNote(ewaybill.getNotes());
+            request.setNotes(List.of(noteLine));
+        }
+
         String targetAlias;
         if (customerInfo.getRecipientType() == EWaybillRecipientType.REGISTERED_USER) {
             targetAlias = customerInfo.getDefaultAlias();
@@ -254,30 +263,67 @@ public class EWaybillService {
             targetAlias = "urn:mail:irsaliyepk@gib.gov.tr";
         }
 
+        // ----- TCKN/VKN AYRIMI MANTIĞI BAŞLANGIÇ -----
+        String taxNumber = taxInfo.getTaxNumber().replaceAll("\\s+", "");
+        boolean isPerson = taxNumber.length() == 11;
+
+        String buyerFirstName;
+        String buyerLastName = null;
+
+        if (isPerson) {
+            String fullName = customer.getName().trim();
+            int lastSpaceIndex = fullName.lastIndexOf(' ');
+            if (lastSpaceIndex > 0 && lastSpaceIndex < fullName.length() - 1) {
+                buyerFirstName = fullName.substring(0, lastSpaceIndex);
+                buyerLastName = fullName.substring(lastSpaceIndex + 1);
+            } else {
+                buyerFirstName = fullName;
+            }
+        } else { // VKN - Şirket
+            buyerFirstName = taxInfo.getTradeName();
+        }
+
+        // --- AddressBook (Alıcı Detaylı Bilgileri) ---
         TurkcellApiRequest.AddressBook addressBook = new TurkcellApiRequest.AddressBook();
-        addressBook.setIdentificationNumber(taxInfo.getTaxNumber());
-        addressBook.setName(customer.getName());
+        addressBook.setIdentificationNumber(taxNumber);
+        addressBook.setName(buyerFirstName);
+        if (isPerson) {
+            addressBook.setReceiverPersonSurName(buyerLastName);
+        }
         addressBook.setAlias(targetAlias);
-        addressBook.setReceiverCity(address.getProvince());
+        addressBook.setReceiverStreet(address.getDetails());
         addressBook.setReceiverDistrict(address.getDistrict());
+        addressBook.setReceiverCity(address.getProvince());
         addressBook.setReceiverCountry("Türkiye");
+        addressBook.setReceiverPhoneNumber(customer.getPhone());
+        addressBook.setReceiverEmail(customer.getEmail());
+        addressBook.setReceiverTaxOffice(taxInfo.getTaxOffice());
+        addressBook.setReceiverZipCode(address.getZipcode());
         request.setAddressBook(addressBook);
 
+        // --- DespatchBuyerCustomerInfo (Alıcı Temel Bilgileri) ---
+        TurkcellApiRequest.DespatchBuyerCustomerInfo buyerInfo = new TurkcellApiRequest.DespatchBuyerCustomerInfo();
+        buyerInfo.setIdentificationNumber(taxNumber);
+        buyerInfo.setName(buyerFirstName);
+        if (isPerson) {
+            buyerInfo.setPersonSurName(buyerLastName);
+        }
+        buyerInfo.setCity(address.getProvince());
+        buyerInfo.setDistrict(address.getDistrict());
+        buyerInfo.setCountryName("Türkiye");
+        request.setDespatchBuyerCustomerInfo(buyerInfo);
+        // ----- TCKN/VKN AYRIMI MANTIĞI BİTİŞ -----
+
+        // --- DeliveryAddressInfo (Teslimat Adresi) ---
         TurkcellApiRequest.DeliveryAddressInfo deliveryAddress = new TurkcellApiRequest.DeliveryAddressInfo();
+        deliveryAddress.setStreet(address.getDetails());
         deliveryAddress.setCity(address.getProvince());
         deliveryAddress.setDistrict(address.getDistrict());
         deliveryAddress.setCountryName("Türkiye");
         deliveryAddress.setZipCode(address.getZipcode());
         request.setDeliveryAddressInfo(deliveryAddress);
 
-        TurkcellApiRequest.DespatchBuyerCustomerInfo buyerInfo = new TurkcellApiRequest.DespatchBuyerCustomerInfo();
-        buyerInfo.setIdentificationNumber(taxInfo.getTaxNumber());
-        buyerInfo.setName(customer.getName());
-        buyerInfo.setCity(address.getProvince());
-        buyerInfo.setDistrict(address.getDistrict());
-        buyerInfo.setCountryName("Türkiye");
-        request.setDespatchBuyerCustomerInfo(buyerInfo);
-
+        // --- DespatchShipmentInfo (Taşıma Bilgileri) ---
         TurkcellApiRequest.DespatchShipmentInfo shipmentInfo = new TurkcellApiRequest.DespatchShipmentInfo();
         String vknTckn = ewaybill.getCarrierVknTckn();
         String name = ewaybill.getCarrierName();
@@ -305,6 +351,7 @@ public class EWaybillService {
         }
         request.setDespatchShipmentInfo(shipmentInfo);
 
+        // --- SellerSupplierInfo (Gönderici Bilgileri) ---
         TurkcellApiRequest.SellerSupplierInfo sellerInfo = new TurkcellApiRequest.SellerSupplierInfo();
         sellerInfo.setIdentificationNumber(senderVkn);
         sellerInfo.setName(senderName);
@@ -314,6 +361,7 @@ public class EWaybillService {
         sellerInfo.setCountryName(senderCountry);
         request.setSellerSupplierInfo(sellerInfo);
 
+        // --- DespatchLines (Ürün Kalemleri) ---
         List<TurkcellApiRequest.DespatchLine> despatchLines = new ArrayList<>();
         for (EWaybillItem item : ewaybill.getItems()) {
             TurkcellApiRequest.DespatchLine line = new TurkcellApiRequest.DespatchLine();

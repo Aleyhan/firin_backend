@@ -22,19 +22,18 @@ import java.util.List;
 @Data
 @Entity
 @Table(name = "customers")
+@ToString(exclude = {"taxInfo", "productAssignments"}) // DEĞİŞİKLİK BURADA
 public class Customer {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // YENİ EKLENDİ: Benzersiz, 4 haneli müşteri kodu
     @Column(unique = true, nullable = false, length = 4)
     private String customerCode;
 
     @Column(nullable = false)
     private String name;
 
-    // YENİ EKLENDİ: Müşteriyle ilgili kalıcı notlar
     @Column(columnDefinition = "TEXT")
     private String notes;
 
@@ -46,8 +45,8 @@ public class Customer {
     private boolean isActive = true;
 
     @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
-    @JoinColumn(name = "address_id", referencedColumnName = "id") // YENİ: Müşteri tablosuna adresin ID'sini ekliyoruz.
-    private Address address; // List<Address> yerine tek bir Address nesnesi
+    @JoinColumn(name = "address_id", referencedColumnName = "id")
+    private Address address;
 
     @OneToOne(mappedBy = "customer", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     private TaxInfo taxInfo;
@@ -64,9 +63,7 @@ public class Customer {
     @Column(name = "day_of_week", nullable = false)
     private Set<DayOfWeek> irsaliyeGunleri = new HashSet<>();
 
-    // Customer.java sınıfının içinde...
     @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true)
-    @ToString.Exclude
     @EqualsAndHashCode.Exclude
     private Set<CustomerProductAssignment> productAssignments = new HashSet<>();
 }

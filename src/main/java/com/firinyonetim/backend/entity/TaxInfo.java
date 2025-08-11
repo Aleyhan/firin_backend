@@ -2,25 +2,27 @@ package com.firinyonetim.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.ToString;
 
 @Data
 @Entity
 @Table(name = "tax_infos")
+@ToString(exclude = "customer") // DEĞİŞİKLİK BURADA
 public class TaxInfo {
     @Id
-    private Long id; // Customer ID'yi Primary Key olarak kullanacağız (One-to-One)
+    private Long id;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @MapsId // Bu anotasyon, id alanının customer ilişkisinden alınacağını belirtir.
+    @MapsId
     @JoinColumn(name = "customer_id")
     private Customer customer;
 
     @Column(nullable = false)
-    private String tradeName; // Ticari Unvan
+    private String tradeName;
 
     @Column(nullable = false, unique = true)
-    private String taxNumber; // Vergi Numarası
+    private String taxNumber;
 
     @Column(nullable = false)
-    private String taxOffice; // Vergi Dairesi
+    private String taxOffice;
 }
