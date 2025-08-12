@@ -250,11 +250,24 @@ public class EWaybillService {
         EWaybillCustomerInfo customerInfo = eWaybillCustomerInfoRepository.findById(customer.getId())
                 .orElseThrow(() -> new IllegalStateException("Müşteri '" + customer.getName() + "' için e-İrsaliye bilgisi yapılandırılmamış."));
 
+        // ----- NOT ALANI GÜNCELLEMESİ BAŞLANGIÇ -----
+        List<TurkcellApiRequest.NoteLine> notes = new ArrayList<>();
+
+        // 1. Müşteri adını not olarak ekle
+        TurkcellApiRequest.NoteLine customerNameNote = new TurkcellApiRequest.NoteLine();
+        customerNameNote.setNote(customer.getName());
+        notes.add(customerNameNote);
+
+        // 2. Eğer kullanıcı tarafından girilmiş bir not varsa, onu da ekle
         if (StringUtils.hasText(ewaybill.getNotes())) {
-            TurkcellApiRequest.NoteLine noteLine = new TurkcellApiRequest.NoteLine();
-            noteLine.setNote(ewaybill.getNotes());
-            request.setNotes(List.of(noteLine));
+            TurkcellApiRequest.NoteLine userNote = new TurkcellApiRequest.NoteLine();
+            userNote.setNote(ewaybill.getNotes());
+            notes.add(userNote);
         }
+        System.out.println("Notlar: " + notes);
+        // Not listesini ana isteğe ekle
+        request.setNotes(notes);
+        // ----- NOT ALANI GÜNCELLEMESİ BİTİŞ -----
 
         String targetAlias;
         if (customerInfo.getRecipientType() == EWaybillRecipientType.REGISTERED_USER) {
@@ -263,27 +276,30 @@ public class EWaybillService {
             targetAlias = "urn:mail:irsaliyepk@gib.gov.tr";
         }
 
-        // ----- TCKN/VKN AYRIMI MANTIĞI BAŞLANGIÇ -----
         String taxNumber = taxInfo.getTaxNumber().replaceAll("\\s+", "");
         boolean isPerson = taxNumber.length() == 11;
 
         String buyerFirstName;
         String buyerLastName = null;
 
+        String fullNameFromTaxInfo = taxInfo.getTradeName();
+        if (!StringUtils.hasText(fullNameFromTaxInfo)) {
+            throw new IllegalStateException("Müşteri (ID: " + customer.getId() + ") için TaxInfo'da ticari unvan (tradeName) boş olamaz.");
+        }
+        fullNameFromTaxInfo = fullNameFromTaxInfo.trim();
+
         if (isPerson) {
-            String fullName = customer.getName().trim();
-            int lastSpaceIndex = fullName.lastIndexOf(' ');
-            if (lastSpaceIndex > 0 && lastSpaceIndex < fullName.length() - 1) {
-                buyerFirstName = fullName.substring(0, lastSpaceIndex);
-                buyerLastName = fullName.substring(lastSpaceIndex + 1);
+            int lastSpaceIndex = fullNameFromTaxInfo.lastIndexOf(' ');
+            if (lastSpaceIndex > 0 && lastSpaceIndex < fullNameFromTaxInfo.length() - 1) {
+                buyerFirstName = fullNameFromTaxInfo.substring(0, lastSpaceIndex);
+                buyerLastName = fullNameFromTaxInfo.substring(lastSpaceIndex + 1);
             } else {
-                buyerFirstName = fullName;
+                buyerFirstName = fullNameFromTaxInfo;
             }
-        } else { // VKN - Şirket
-            buyerFirstName = taxInfo.getTradeName();
+        } else {
+            buyerFirstName = fullNameFromTaxInfo;
         }
 
-        // --- AddressBook (Alıcı Detaylı Bilgileri) ---
         TurkcellApiRequest.AddressBook addressBook = new TurkcellApiRequest.AddressBook();
         addressBook.setIdentificationNumber(taxNumber);
         addressBook.setName(buyerFirstName);
@@ -301,7 +317,6 @@ public class EWaybillService {
         addressBook.setReceiverZipCode(address.getZipcode());
         request.setAddressBook(addressBook);
 
-        // --- DespatchBuyerCustomerInfo (Alıcı Temel Bilgileri) ---
         TurkcellApiRequest.DespatchBuyerCustomerInfo buyerInfo = new TurkcellApiRequest.DespatchBuyerCustomerInfo();
         buyerInfo.setIdentificationNumber(taxNumber);
         buyerInfo.setName(buyerFirstName);
@@ -312,9 +327,7 @@ public class EWaybillService {
         buyerInfo.setDistrict(address.getDistrict());
         buyerInfo.setCountryName("Türkiye");
         request.setDespatchBuyerCustomerInfo(buyerInfo);
-        // ----- TCKN/VKN AYRIMI MANTIĞI BİTİŞ -----
 
-        // --- DeliveryAddressInfo (Teslimat Adresi) ---
         TurkcellApiRequest.DeliveryAddressInfo deliveryAddress = new TurkcellApiRequest.DeliveryAddressInfo();
         deliveryAddress.setStreet(address.getDetails());
         deliveryAddress.setCity(address.getProvince());
@@ -323,7 +336,6 @@ public class EWaybillService {
         deliveryAddress.setZipCode(address.getZipcode());
         request.setDeliveryAddressInfo(deliveryAddress);
 
-        // --- DespatchShipmentInfo (Taşıma Bilgileri) ---
         TurkcellApiRequest.DespatchShipmentInfo shipmentInfo = new TurkcellApiRequest.DespatchShipmentInfo();
         String vknTckn = ewaybill.getCarrierVknTckn();
         String name = ewaybill.getCarrierName();
@@ -351,7 +363,6 @@ public class EWaybillService {
         }
         request.setDespatchShipmentInfo(shipmentInfo);
 
-        // --- SellerSupplierInfo (Gönderici Bilgileri) ---
         TurkcellApiRequest.SellerSupplierInfo sellerInfo = new TurkcellApiRequest.SellerSupplierInfo();
         sellerInfo.setIdentificationNumber(senderVkn);
         sellerInfo.setName(senderName);
@@ -361,7 +372,6 @@ public class EWaybillService {
         sellerInfo.setCountryName(senderCountry);
         request.setSellerSupplierInfo(sellerInfo);
 
-        // --- DespatchLines (Ürün Kalemleri) ---
         List<TurkcellApiRequest.DespatchLine> despatchLines = new ArrayList<>();
         for (EWaybillItem item : ewaybill.getItems()) {
             TurkcellApiRequest.DespatchLine line = new TurkcellApiRequest.DespatchLine();
