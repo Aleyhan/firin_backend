@@ -255,7 +255,7 @@ public class EWaybillService {
 
         // 1. Müşteri adını not olarak ekle
         TurkcellApiRequest.NoteLine customerNameNote = new TurkcellApiRequest.NoteLine();
-        customerNameNote.setNote(customer.getName());
+        customerNameNote.setNote("Yetkili: " + customer.getName());
         notes.add(customerNameNote);
 
         // 2. Eğer kullanıcı tarafından girilmiş bir not varsa, onu da ekle
@@ -538,18 +538,19 @@ public class EWaybillService {
         }
     }
 
-    // --- VALIDASYON METODU BURADA KALIYOR ---
+    // BU METODU BUL VE İÇERİĞİNİ AŞAĞIDAKİ İLE DEĞİŞTİR
     private void validateEWaybillDates(LocalDate issueDate, LocalTime issueTime, LocalDateTime shipmentDate) {
         LocalDateTime issueDateTime = issueDate.atTime(issueTime);
 
-        // Kural 1: Sevk tarihi, irsaliye tarihinden önce olamaz.
-        if (shipmentDate.isBefore(issueDateTime)) {
-            throw new IllegalArgumentException("Sevk tarihi, irsaliye tarihinden önce olamaz.");
+        // Kural 1: İrsaliye tarihi geçmiş bir gün olamaz.
+        // Bu kontrol DTO seviyesinde @FutureOrPresent ile zaten yapılıyor, bu ek bir güvencedir.
+        if (issueDate.isBefore(LocalDate.now())) {
+            throw new IllegalArgumentException("İrsaliye tarihi geçmiş bir gün olamaz.");
         }
 
-        // Kural 2: İrsaliye tarihi bugün ise, irsaliye saati geçmiş bir saat olamaz.
-        if (issueDate.isEqual(LocalDate.now()) && issueTime.isBefore(LocalTime.now().minusMinutes(2))) {
-            throw new IllegalArgumentException("İrsaliye saati taslakta geçmiş kalmış, bu gönderim saatiyle uyuşmuyor.");
+        // Kural 3: Sevk tarihi ve saati, irsaliye tarih ve saatinden önce olamaz. Eşit olabilir.
+        if (shipmentDate.isBefore(issueDateTime)) {
+            throw new IllegalArgumentException("Sevk tarihi ve saati, irsaliye tarih ve saatinden önce olamaz.");
         }
     }
 

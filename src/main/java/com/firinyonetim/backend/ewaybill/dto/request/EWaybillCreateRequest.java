@@ -29,7 +29,6 @@ public class EWaybillCreateRequest {
     private LocalTime issueTime;
 
     @NotNull(message = "Sevk tarihi boş olamaz.")
-    @FutureOrPresent(message = "Sevk tarihi geçmiş bir tarih olamaz.")
     private LocalDateTime shipmentDate;
 
     private String notes;
