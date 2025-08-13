@@ -1,10 +1,9 @@
 package com.firinyonetim.backend.invoice.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.Data;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @Entity
@@ -14,15 +13,12 @@ public class InvoiceSettings {
     @Id
     private Long id;
 
-    // generalInfoModel
     @Column(nullable = true)
     private String prefix;
 
-    // YENİ ALAN
     @Column(nullable = true)
     private String xsltCode;
 
-    // ublSettingsModel
     @Column(nullable = true)
     private Boolean useCalculatedVatAmount;
 
@@ -32,7 +28,6 @@ public class InvoiceSettings {
     @Column(nullable = true)
     private Boolean hideDespatchMessage;
 
-    // paymentMeansModel (Firma Banka Bilgileri vb.)
     @Column(nullable = true)
     private String paymentMeansCode;
 
@@ -43,8 +38,14 @@ public class InvoiceSettings {
     private String instructionNote;
 
     @Column(nullable = true)
-    private String payeeFinancialAccountId; // IBAN vb.
+    private String payeeFinancialAccountId;
 
     @Column(nullable = true)
-    private String payeeFinancialAccountCurrencyCode; // IBAN Para Birimi
+    private String payeeFinancialAccountCurrencyCode;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "invoice_settings_notes", joinColumns = @JoinColumn(name = "settings_id"))
+    @Column(name = "note", columnDefinition = "TEXT")
+    // DEĞİŞİKLİK BURADA: Liste doğrudan initialize ediliyor.
+    private List<String> defaultNotes = new ArrayList<>();
 }

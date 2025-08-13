@@ -507,6 +507,7 @@ public class EWaybillService {
             validateEWaybillDates(ewaybill.getIssueDate(), ewaybill.getIssueTime(), ewaybill.getShipmentDate());
 
             TurkcellApiRequest request = buildTurkcellRequest(ewaybill);
+
             TurkcellApiResponse apiResponse = turkcellClient.createEWaybill(request);
 
             ewaybill.setTurkcellApiId(apiResponse.getId());

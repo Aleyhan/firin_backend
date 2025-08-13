@@ -47,14 +47,15 @@ public abstract class InvoiceTurkcellMapper {
     @Mapping(target = "localReferenceId", source = "invoice.id")
     @Mapping(target = "useManualInvoiceId", constant = "false")
     @Mapping(target = "xsltCode", source = "settings.xsltCode")
-    @Mapping(target = "note", source = "invoice.notes") // NOT ARTIK DOĞRUDAN GELİYOR
     @Mapping(target = "addressBook", expression = "java(mapAddressBook(invoice.getCustomer()))")
     @Mapping(target = "generalInfoModel", expression = "java(mapGeneralInfoModel(invoice, settings))")
     @Mapping(target = "invoiceLines", expression = "java(mapInvoiceLines(invoice, settings))")
     @Mapping(target = "paymentMeansModel", expression = "java(mapPaymentMeansModel(invoice, settings))")
     @Mapping(target = "relatedDespatchList", expression = "java(mapRelatedDespatchList(invoice.getRelatedDespatchesJson()))")
     @Mapping(target = "ublSettingsModel", expression = "java(mapUblSettingsModel(settings))") // YENİ MAPPING
+    @Mapping(target = "notes", expression = "java(mapNotes(invoice, settings))") // Yeni 'notes' listesini map'le
     public abstract TurkcellInvoiceRequest toTurkcellRequest(Invoice invoice, InvoiceSettings settings);
+
 
     // YENİ METOT
     protected TurkcellInvoiceRequest.UblSettingsModel mapUblSettingsModel(InvoiceSettings settings) {
@@ -201,4 +202,30 @@ public abstract class InvoiceTurkcellMapper {
         model.setCurrencyCode(invoice.getCurrencyCode());
         return model;
     }
+
+    // Bu metot, varsayılan notlar ile faturaya özel notu birleştirir.
+    protected List<TurkcellInvoiceRequest.NoteLine> mapNotes(Invoice invoice, InvoiceSettings settings) {
+        List<TurkcellInvoiceRequest.NoteLine> notes = new ArrayList<>();
+
+        // 1. Ayarlardaki varsayılan notları ekle
+        if (settings.getDefaultNotes() != null) {
+            for (String noteText : settings.getDefaultNotes()) {
+                if (StringUtils.hasText(noteText)) {
+                    TurkcellInvoiceRequest.NoteLine noteLine = new TurkcellInvoiceRequest.NoteLine();
+                    noteLine.setNote(noteText);
+                    notes.add(noteLine);
+                }
+            }
+        }
+
+        // 2. Faturanın kendi özel notunu ekle
+        if (StringUtils.hasText(invoice.getNotes())) {
+            TurkcellInvoiceRequest.NoteLine noteLine = new TurkcellInvoiceRequest.NoteLine();
+            noteLine.setNote(invoice.getNotes());
+            notes.add(noteLine);
+        }
+
+        return notes.isEmpty() ? null : notes;
+    }
+
 }

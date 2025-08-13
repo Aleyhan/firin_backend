@@ -87,6 +87,12 @@ public class InvoiceController {
         return ResponseEntity.ok(invoiceService.calculateItemsFromEwaybills(customerId, ewaybillIds));
     }
 
+    // YENİ ENDPOINT
+    @PostMapping("/check-statuses")
+    public ResponseEntity<Void> checkStatuses() {
+        invoiceService.checkAndUpdateStatuses();
+        return ResponseEntity.ok().build();
+    }
 
 
 }

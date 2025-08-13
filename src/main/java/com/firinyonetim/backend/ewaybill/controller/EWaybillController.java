@@ -107,5 +107,14 @@ public class EWaybillController {
         return ResponseEntity.ok(response);
     }
 
+    // YENİ ENDPOINT
+    @PostMapping("/check-statuses")
+    @PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER', 'MUHASEBE')")
+    public ResponseEntity<Void> checkStatuses() {
+        eWaybillService.checkAndUpdateStatuses();
+        return ResponseEntity.ok().build();
+    }
+
+
 
 }

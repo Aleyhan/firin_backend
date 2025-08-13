@@ -13,7 +13,6 @@ public class InvoiceStatusScheduler {
 
     private final InvoiceService invoiceService;
 
-    @Scheduled(cron = "0 * * * * *") // Her dakikanın başında çalışır
     public void checkPendingInvoiceStatuses() {
         log.info("Scheduler running: Checking for pending invoice statuses...");
         invoiceService.checkAndUpdateStatuses();

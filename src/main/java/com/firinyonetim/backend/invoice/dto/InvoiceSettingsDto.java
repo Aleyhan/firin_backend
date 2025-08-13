@@ -1,12 +1,13 @@
 package com.firinyonetim.backend.invoice.dto;
 
 import lombok.Data;
+import java.util.List;
 
 @Data
 public class InvoiceSettingsDto {
     private Long id;
     private String prefix;
-    private String xsltCode; // YENİ ALAN
+    private String xsltCode;
     private Boolean useCalculatedVatAmount;
     private Boolean useCalculatedTotalSummary;
     private Boolean hideDespatchMessage;
@@ -15,4 +16,5 @@ public class InvoiceSettingsDto {
     private String instructionNote;
     private String payeeFinancialAccountId;
     private String payeeFinancialAccountCurrencyCode;
+    private List<String> defaultNotes; // YENİ ALAN
 }

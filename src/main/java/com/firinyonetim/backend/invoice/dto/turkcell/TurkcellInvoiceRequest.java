@@ -15,20 +15,27 @@ public class TurkcellInvoiceRequest {
     private String localReferenceId;
     private boolean useManualInvoiceId;
     private String xsltCode;
-    private String note;
     private AddressBook addressBook;
     private GeneralInfoModel generalInfoModel;
     private List<InvoiceLine> invoiceLines;
     private PaymentMeansModel paymentMeansModel;
     private List<RelatedDespatch> relatedDespatchList;
-
-    // YENİ EKLENEN ALAN
     private UblSettingsModel ublSettingsModel;
 
-    // YENİ EKLENEN İÇ SINIF
+    // YENİ ALAN: Tıpkı irsaliyedeki gibi not listesi
+    private List<NoteLine> notes;
+
+    // YENİ İÇ SINIF
+    @Data
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static class NoteLine {
+        private String note;
+    }
+
     @Data
     public static class UblSettingsModel {
         private Boolean useCalculatedVatAmount;
+        @JsonProperty("UseCalculatedTotalSummary")
         private Boolean useCalculatedTotalSummary;
         private Boolean hideDespatchMessage;
     }
@@ -89,5 +96,4 @@ public class TurkcellInvoiceRequest {
         private String payeeFinancialAccountId;
         private String payeeFinancialAccountCurrencyCode;
     }
-
 }
