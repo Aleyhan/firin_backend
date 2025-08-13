@@ -273,7 +273,7 @@ try {
     @Transactional(readOnly = true)
     public InvoiceCalculationResponse calculateItemsFromEwaybills(Long customerId, List<UUID> ewaybillIds) {
         InvoiceCalculationResponse response = new InvoiceCalculationResponse();
-        Set<String> warnings = new HashSet<>(); // Uyarı mekanizmasını koruyoruz.
+        Set<String> warnings = new HashSet<>();
 
         List<EWaybill> ewaybills = eWaybillRepository.findAllById(ewaybillIds);
         if (ewaybills.isEmpty()) {
@@ -284,46 +284,50 @@ try {
             throw new IllegalArgumentException("Seçilen irsaliyeler, belirtilen müşteri ile eşleşmiyor.");
         }
 
-        // BU METODUN İÇERİĞİNİ GÜNCELLE
-        Map<Long, BigDecimal> productQuantities = ewaybills.stream()
+        // Geçici bir anahtar sınıfı (record) tanımlıyoruz.
+        // Bu anahtar, gruplama için kullanılacak: ürün, fiyat ve kdv oranı.
+        record ProductPriceKey(Long productId, BigDecimal unitPrice, Integer vatRate) {}
+
+        // İrsaliye kalemlerini bu bileşik anahtara göre gruplayıp miktarları topluyoruz.
+        Map<ProductPriceKey, BigDecimal> groupedItems = ewaybills.stream()
                 .flatMap(e -> e.getItems().stream())
                 .collect(Collectors.groupingBy(
-                        item -> item.getProduct().getId(),
+                        item -> new ProductPriceKey(
+                                item.getProduct().getId(),
+                                item.getPriceVatExclusive(),
+                                item.getVatRate()
+                        ),
                         Collectors.reducing(BigDecimal.ZERO, EWaybillItem::getQuantity, BigDecimal::add)
                 ));
 
-
-        // Her ürün için ilk karşılaşılan irsaliye kalemini (fiyat ve kdv oranını almak için) bul
-        Map<Long, EWaybillItem> firstItemMap = ewaybills.stream()
+        // Her bir ürün ID'si için ilk karşılaşılan EWaybillItem'ı saklayarak ürün adını alıyoruz.
+        Map<Long, EWaybillItem> representativeItemMap = ewaybills.stream()
                 .flatMap(e -> e.getItems().stream())
                 .collect(Collectors.toMap(
                         item -> item.getProduct().getId(),
                         Function.identity(),
-                        (existing, replacement) -> existing // Eğer aynı ürün birden fazla irsaliyede varsa ilkini koru
+                        (existing, replacement) -> existing
                 ));
 
-        List<CalculatedInvoiceItemDto> calculatedItems = new ArrayList<>();
-        productQuantities.forEach((productId, totalQuantity) -> {
-            EWaybillItem representativeItem = firstItemMap.get(productId);
-            if (representativeItem == null) {
-                // Bu durumun oluşmaması gerekir ama bir güvenlik önlemi
-                throw new IllegalStateException("İrsaliyelerde bulunan bir ürün için kalem bilgisi bulunamadı: " + productId);
-            }
+        List<CalculatedInvoiceItemDto> calculatedItems = groupedItems.entrySet().stream()
+                .map(entry -> {
+                    ProductPriceKey key = entry.getKey();
+                    BigDecimal totalQuantity = entry.getValue();
+                    EWaybillItem representativeItem = representativeItemMap.get(key.productId());
 
-            CalculatedInvoiceItemDto dto = new CalculatedInvoiceItemDto();
-            dto.setProductId(productId);
-            dto.setProductName(representativeItem.getProductNameSnapshot());
-            dto.setQuantity(totalQuantity.intValue()); // Miktarı toplanmış miktar olarak ayarla
+                    CalculatedInvoiceItemDto dto = new CalculatedInvoiceItemDto();
+                    dto.setProductId(key.productId());
+                    dto.setProductName(representativeItem.getProductNameSnapshot());
+                    dto.setQuantity(totalQuantity.intValue());
+                    dto.setUnitPrice(key.unitPrice());
+                    dto.setVatRate(key.vatRate());
 
-            // Fiyatı ve KDV oranını doğrudan irsaliye kaleminden al
-            dto.setUnitPrice(representativeItem.getPriceVatExclusive());
-            dto.setVatRate(representativeItem.getVatRate());
-
-            calculatedItems.add(dto);
-        });
+                    return dto;
+                })
+                .collect(Collectors.toList());
 
         response.setItems(calculatedItems);
-        response.setWarnings(new ArrayList<>(warnings)); // Uyarı listesini (şimdilik boş) yanıta ekle
+        response.setWarnings(new ArrayList<>(warnings));
         return response;
     }
 

@@ -43,6 +43,7 @@ public class TurkcellInvoiceRequest {
         private String receiverCity;
         private String receiverCountry;
         private String receiverEmail;
+        private String receiverPhoneNumber;
         private String receiverStreet;
         private String receiverBuildingName;
         private String receiverDoorNumber;

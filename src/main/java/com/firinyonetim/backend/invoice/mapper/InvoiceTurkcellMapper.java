@@ -128,8 +128,51 @@ public abstract class InvoiceTurkcellMapper {
         EWaybillCustomerInfo customerInfo = eWaybillCustomerInfoRepository.findById(customer.getId())
                 .orElseThrow(() -> new IllegalStateException("Müşteri '" + customer.getName() + "' için e-Fatura/e-İrsaliye bilgisi yapılandırılmamış."));
 
+        if (customer.getTaxInfo() == null) {
+            throw new IllegalStateException("Müşteri (ID: " + customer.getId() + ") için vergi bilgileri (TaxInfo) bulunamadı.");
+        }
+        if (customer.getAddress() == null) {
+            throw new IllegalStateException("Müşteri (ID: " + customer.getId() + ") için adres bilgisi bulunamadı.");
+        }
+
+        String taxNumber = customer.getTaxInfo().getTaxNumber();
+        if (!StringUtils.hasText(taxNumber)) {
+            throw new IllegalStateException("Müşteri (ID: " + customer.getId() + ") için vergi/TC kimlik numarası boş olamaz.");
+        }
+
+        boolean isPerson = taxNumber.length() == 11;
+
+        String buyerFirstName;
+        String buyerLastName = null;
+
+        String fullNameFromTaxInfo = customer.getTaxInfo().getTradeName();
+        if (!StringUtils.hasText(fullNameFromTaxInfo)) {
+            // Fallback to customer name if trade name is not available
+            fullNameFromTaxInfo = customer.getName();
+        }
+        if (!StringUtils.hasText(fullNameFromTaxInfo)) {
+            throw new IllegalStateException("Müşteri (ID: " + customer.getId() + ") için ticari unvan (tradeName) veya müşteri adı boş olamaz.");
+        }
+        fullNameFromTaxInfo = fullNameFromTaxInfo.trim();
+
+        if (isPerson) {
+            int lastSpaceIndex = fullNameFromTaxInfo.lastIndexOf(' ');
+            if (lastSpaceIndex > 0 && lastSpaceIndex < fullNameFromTaxInfo.length() - 1) {
+                buyerFirstName = fullNameFromTaxInfo.substring(0, lastSpaceIndex);
+                buyerLastName = fullNameFromTaxInfo.substring(lastSpaceIndex + 1);
+            } else {
+                buyerFirstName = fullNameFromTaxInfo;
+            }
+        } else {
+            buyerFirstName = fullNameFromTaxInfo;
+        }
+
         TurkcellInvoiceRequest.AddressBook addressBook = new TurkcellInvoiceRequest.AddressBook();
-        addressBook.setName(customer.getName());
+        addressBook.setIdentificationNumber(taxNumber);
+        addressBook.setName(buyerFirstName);
+        if (isPerson) {
+            addressBook.setReceiverPersonSurName(buyerLastName);
+        }
 
         if (customerInfo.getRecipientType() == EWaybillRecipientType.REGISTERED_USER) {
             addressBook.setAlias(customerInfo.getDefaultAlias());
@@ -137,14 +180,15 @@ public abstract class InvoiceTurkcellMapper {
             addressBook.setAlias(null);
         }
 
-        addressBook.setIdentificationNumber(customer.getTaxInfo() != null ? customer.getTaxInfo().getTaxNumber() : null);
-        addressBook.setReceiverCity(customer.getAddress() != null ? customer.getAddress().getProvince() : null);
-        addressBook.setReceiverDistrict(customer.getAddress() != null ? customer.getAddress().getDistrict() : null);
+        addressBook.setReceiverStreet(customer.getAddress().getDetails());
+        addressBook.setReceiverDistrict(customer.getAddress().getDistrict());
+        addressBook.setReceiverCity(customer.getAddress().getProvince());
         addressBook.setReceiverCountry("Türkiye");
+        addressBook.setReceiverPhoneNumber(customer.getPhone());
         addressBook.setReceiverEmail(customer.getEmail());
-        addressBook.setReceiverStreet(customer.getAddress() != null ? customer.getAddress().getDetails() : null);
-        addressBook.setReceiverZipCode(customer.getAddress() != null ? customer.getAddress().getZipcode() : null);
-        addressBook.setReceiverTaxOffice(customer.getTaxInfo() != null ? customer.getTaxInfo().getTaxOffice() : null);
+        addressBook.setReceiverTaxOffice(customer.getTaxInfo().getTaxOffice());
+        addressBook.setReceiverZipCode(customer.getAddress().getZipcode());
+
         return addressBook;
     }
 
