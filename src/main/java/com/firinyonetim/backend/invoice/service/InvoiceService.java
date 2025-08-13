@@ -317,8 +317,7 @@ try {
 
             // Fiyatı ve KDV oranını doğrudan irsaliye kaleminden al
             dto.setUnitPrice(representativeItem.getPriceVatExclusive());
-            // Not: InvoiceItemRequest'te vatRate alanı yok, bu bilgi Product'tan alınacak.
-            // Bu yüzden dto'ya eklemeye gerek yok, sadece unitPrice'ı doğru göndermemiz yeterli.
+            dto.setVatRate(representativeItem.getVatRate());
 
             calculatedItems.add(dto);
         });
