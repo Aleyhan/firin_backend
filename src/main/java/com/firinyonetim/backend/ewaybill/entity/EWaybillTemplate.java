@@ -35,9 +35,6 @@ public class EWaybillTemplate {
     @JoinColumn(name = "last_updated_by_user_id", nullable = false)
     private User lastUpdatedBy;
 
-    private String carrierName;
-    private String carrierVknTckn;
-    private String plateNumber;
 
     @ToString.Exclude
     @EqualsAndHashCode.Exclude

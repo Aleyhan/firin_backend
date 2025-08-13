@@ -1,4 +1,3 @@
-// src/main/java/com/firinyonetim/backend/ewaybill/entity/EWaybillItem.java
 package com.firinyonetim.backend.ewaybill.entity;
 
 import com.firinyonetim.backend.entity.Product;
@@ -36,4 +35,11 @@ public class EWaybillItem {
 
     @Column(nullable = false, length = 10)
     private String unitCode;
+
+    // YENİ ALANLAR
+    @Column(name = "price_vat_exclusive", precision = 19, scale = 4)
+    private BigDecimal priceVatExclusive;
+
+    @Column(name = "price_vat_included", precision = 19, scale = 4)
+    private BigDecimal priceVatIncluded;
 }

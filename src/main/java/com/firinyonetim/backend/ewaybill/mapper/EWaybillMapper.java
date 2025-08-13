@@ -26,6 +26,7 @@ public interface EWaybillMapper {
     @Mapping(target = "despatchBuyerCustomerInfo", ignore = true)
     @Mapping(target = "sellerSupplierInfo", ignore = true)
     @Mapping(target = "despatchLines", ignore = true)
+    @Mapping(target = "notes", ignore = true) // DEĞİŞİKLİK BURADA
     TurkcellApiRequest toTurkcellApiRequest(EWaybill eWaybill);
 
     @Mapping(source = "productNameSnapshot", target = "productName")
@@ -38,6 +39,8 @@ public interface EWaybillMapper {
     EWaybillResponse toResponseDto(EWaybill eWaybill);
 
     @Mapping(source = "product.id", target = "productId")
+    @Mapping(source = "priceVatExclusive", target = "priceVatExclusive")
+    @Mapping(source = "priceVatIncluded", target = "priceVatIncluded")
     EWaybillItemResponse itemToItemResponseDto(EWaybillItem item);
 
     @Mapping(target = "id", ignore = true)

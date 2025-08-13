@@ -1,4 +1,3 @@
-// src/main/java/com/firinyonetim/backend/ewaybill/dto/response/EWaybillItemResponse.java
 package com.firinyonetim.backend.ewaybill.dto.response;
 
 import lombok.Data;
@@ -11,4 +10,7 @@ public class EWaybillItemResponse {
     private String productNameSnapshot;
     private BigDecimal quantity;
     private String unitCode;
+    // YENİ ALANLAR
+    private BigDecimal priceVatExclusive;
+    private BigDecimal priceVatIncluded;
 }

@@ -16,9 +16,7 @@ import com.firinyonetim.backend.ewaybill.repository.EWaybillCustomerInfoReposito
 import com.firinyonetim.backend.ewaybill.repository.EWaybillRepository;
 import com.firinyonetim.backend.ewaybill.repository.EWaybillTemplateRepository;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
-import com.firinyonetim.backend.repository.CustomerRepository;
-import com.firinyonetim.backend.repository.ProductRepository;
-import com.firinyonetim.backend.repository.RouteRepository;
+import com.firinyonetim.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,12 +33,14 @@ import com.firinyonetim.backend.ewaybill.dto.response.BulkSendResultDto;
 import com.firinyonetim.backend.ewaybill.dto.turkcell.TurkcellApiRequest.NoteLine; // YENİ IMPORT
 
 
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.TextStyle;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.math.RoundingMode; // YENİ IMPORT
 
 @Slf4j
 @Service
@@ -56,6 +56,9 @@ public class EWaybillService {
     private final ObjectMapper objectMapper;
     private final EWaybillCustomerInfoRepository eWaybillCustomerInfoRepository;
     private final EWaybillTemplateRepository eWaybillTemplateRepository;
+    private final CustomerProductAssignmentRepository customerProductAssignmentRepository; // YENİ REPO
+    private final RouteAssignmentRepository routeAssignmentRepository; // YENİ REPO
+
 
     // --- EKSİK OLAN ALANLAR BURAYA EKLENDİ ---
     @Value("${ewaybill.sender.vkn}")
@@ -159,16 +162,30 @@ public class EWaybillService {
     }
 
     private Set<EWaybillItem> processItems(Set<EWaybillItemRequest> itemRequests, EWaybill ewaybill) {
+        Long customerId = ewaybill.getCustomer().getId();
+        Map<Long, CustomerProductAssignment> assignmentsMap = customerProductAssignmentRepository
+                .findByCustomerId(customerId).stream()
+                .collect(Collectors.toMap(cpa -> cpa.getProduct().getId(), cpa -> cpa));
+
         Set<EWaybillItem> items = new HashSet<>();
         for (EWaybillItemRequest itemDto : itemRequests) {
             Product product = productRepository.findById(itemDto.getProductId())
                     .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + itemDto.getProductId()));
+
+            CustomerProductAssignment assignment = assignmentsMap.get(product.getId());
+            if (assignment == null) {
+                throw new IllegalStateException("Ürün '" + product.getName() + "' bu müşteriye atanmamış. İrsaliye oluşturulamaz.");
+            }
 
             EWaybillItem item = new EWaybillItem();
             item.setEWaybill(ewaybill);
             item.setProduct(product);
             item.setProductNameSnapshot(product.getName());
             item.setQuantity(itemDto.getQuantity());
+
+            // Fiyatları ata
+            item.setPriceVatExclusive(assignment.getFinalPriceVatExclusive());
+            item.setPriceVatIncluded(assignment.getFinalPriceVatIncluded());
 
             String unitCode = "C62";
             if (product.getUnit() != null && StringUtils.hasText(product.getUnit().getCode())) {
@@ -199,23 +216,43 @@ public class EWaybillService {
             EWaybill ewaybill = new EWaybill();
             ewaybill.setCreatedBy(currentUser);
             ewaybill.setCustomer(customer);
-
             ewaybill.setIssueDate(request.getIssueDate());
             ewaybill.setIssueTime(request.getIssueTime());
             ewaybill.setShipmentDate(request.getShipmentDate());
-
             ewaybill.setNotes(template.getNotes());
-            ewaybill.setCarrierName(template.getCarrierName());
-            ewaybill.setCarrierVknTckn(template.getCarrierVknTckn());
-            ewaybill.setPlateNumber(template.getPlateNumber());
+
+            // DEĞİŞİKLİK BURADA: Taşıyıcı bilgilerini almak için repository kullanılıyor.
+            List<RouteAssignment> assignments = routeAssignmentRepository.findByCustomerId(customerId);
+            if (!assignments.isEmpty()) {
+                // Müşterinin atandığı ilk rotayı alıyoruz.
+                Route route = assignments.get(0).getRoute();
+                ewaybill.setPlateNumber(route.getPlaka());
+                if(route.getDriver() != null) {
+                    User driver = route.getDriver();
+                    ewaybill.setCarrierName(driver.getName() + " " + driver.getSurname());
+                    ewaybill.setCarrierVknTckn(driver.getTckn());
+                }
+            }
+
+            // Fiyat bilgisiyle birlikte kalemleri oluştur
+            Map<Long, CustomerProductAssignment> assignmentsMap = customerProductAssignmentRepository
+                    .findByCustomerId(customerId).stream()
+                    .collect(Collectors.toMap(cpa -> cpa.getProduct().getId(), cpa -> cpa));
 
             template.getItems().forEach(templateItem -> {
+                CustomerProductAssignment assignment = assignmentsMap.get(templateItem.getProduct().getId());
+                if (assignment == null) {
+                    throw new IllegalStateException("Şablondaki ürün '" + templateItem.getProductNameSnapshot() + "' bu müşteriye atanmamış.");
+                }
+
                 EWaybillItem newItem = new EWaybillItem();
                 newItem.setEWaybill(ewaybill);
                 newItem.setProduct(templateItem.getProduct());
                 newItem.setProductNameSnapshot(templateItem.getProductNameSnapshot());
                 newItem.setQuantity(templateItem.getQuantity());
                 newItem.setUnitCode(templateItem.getUnitCode());
+                newItem.setPriceVatExclusive(assignment.getFinalPriceVatExclusive());
+                newItem.setPriceVatIncluded(assignment.getFinalPriceVatIncluded());
                 ewaybill.getItems().add(newItem);
             });
 
@@ -223,7 +260,6 @@ public class EWaybillService {
             createdEWaybills.add(eWaybillMapper.toResponseDto(savedEWaybill));
             log.info("E-Waybill (from template) created for customer {} by user {}", customerId, currentUser.getUsername());
         }
-
         return createdEWaybills;
     }
 

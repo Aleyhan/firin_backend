@@ -10,9 +10,6 @@ import java.util.Set;
 @Data
 public class EWaybillTemplateRequest {
     private String notes;
-    private String carrierName;
-    private String carrierVknTckn;
-    private String plateNumber;
 
     @NotEmpty
     @Valid
