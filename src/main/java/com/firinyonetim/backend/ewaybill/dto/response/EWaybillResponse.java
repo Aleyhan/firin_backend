@@ -1,4 +1,3 @@
-// src/main/java/com/firinyonetim/backend/ewaybill/dto/response/EWaybillResponse.java
 package com.firinyonetim.backend.ewaybill.dto.response;
 
 import com.firinyonetim.backend.ewaybill.entity.EWaybillStatus;
@@ -29,4 +28,8 @@ public class EWaybillResponse {
     private String carrierVknTckn;
     private Set<EWaybillItemResponse> items;
     private LocalDateTime createdAt;
+
+    // YENİ ALANLAR
+    private UUID invoiceId;
+    private String invoiceNumber;
 }

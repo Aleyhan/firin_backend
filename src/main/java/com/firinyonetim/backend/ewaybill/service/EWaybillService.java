@@ -2,6 +2,7 @@
 package com.firinyonetim.backend.ewaybill.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.firinyonetim.backend.entity.*;
 import com.firinyonetim.backend.ewaybill.dto.request.BulkEWaybillFromTemplateRequest;
@@ -16,6 +17,8 @@ import com.firinyonetim.backend.ewaybill.repository.EWaybillCustomerInfoReposito
 import com.firinyonetim.backend.ewaybill.repository.EWaybillRepository;
 import com.firinyonetim.backend.ewaybill.repository.EWaybillTemplateRepository;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
+import com.firinyonetim.backend.invoice.entity.Invoice;
+import com.firinyonetim.backend.invoice.repository.InvoiceRepository;
 import com.firinyonetim.backend.repository.*;
 import com.firinyonetim.backend.service.CompanyInfoService;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +47,7 @@ import java.time.format.TextStyle;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.math.RoundingMode; // YENİ IMPORT
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -62,12 +66,41 @@ public class EWaybillService {
     private final CustomerProductAssignmentRepository customerProductAssignmentRepository; // YENİ REPO
     private final RouteAssignmentRepository routeAssignmentRepository; // YENİ REPO
     private final CompanyInfoService companyInfoService; // YENİ SERVİS
+    private final InvoiceRepository invoiceRepository;
 
 
+    // BU METODU GÜNCELLE
     @Transactional(readOnly = true)
     public List<EWaybillResponse> findAll() {
-        return eWaybillRepository.findAll().stream()
-                .map(eWaybillMapper::toResponseDto)
+        List<EWaybill> ewaybills = eWaybillRepository.findAll();
+        List<Invoice> allInvoices = invoiceRepository.findAll();
+
+        // Faturalanmış tüm irsaliye ID'lerini ve fatura bilgilerini bir haritada topla
+        Map<UUID, Invoice> invoicedEwaybillMap = allInvoices.stream()
+                .filter(invoice -> StringUtils.hasText(invoice.getRelatedDespatchesJson()))
+                .flatMap(invoice -> {
+                    try {
+                        List<Map<String, String>> despatches = objectMapper.readValue(invoice.getRelatedDespatchesJson(), new TypeReference<>() {});
+                        return despatches.stream()
+                                .map(d -> UUID.fromString(d.get("id")))
+                                .map(ewaybillId -> new AbstractMap.SimpleEntry<>(ewaybillId, invoice));
+                    } catch (JsonProcessingException e) {
+                        log.error("Could not parse relatedDespatchesJson for invoice {}", invoice.getId(), e);
+                        return Stream.empty();
+                    }
+                })
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (existing, replacement) -> existing)); // Duplike key durumunda ilkini koru
+
+        return ewaybills.stream()
+                .map(ewaybill -> {
+                    EWaybillResponse dto = eWaybillMapper.toResponseDto(ewaybill);
+                    Invoice relatedInvoice = invoicedEwaybillMap.get(ewaybill.getId());
+                    if (relatedInvoice != null) {
+                        dto.setInvoiceId(relatedInvoice.getId());
+                        dto.setInvoiceNumber(relatedInvoice.getInvoiceNumber());
+                    }
+                    return dto;
+                })
                 .collect(Collectors.toList());
     }
 

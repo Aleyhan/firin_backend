@@ -371,24 +371,68 @@ try {
     @Transactional(readOnly = true)
     public InvoiceCalculationResponse calculateItemsFromEwaybills(Long customerId, List<UUID> ewaybillIds) {
         InvoiceCalculationResponse response = new InvoiceCalculationResponse();
-        Set<String> warnings = new HashSet<>();
+        Set<String> errors = new HashSet<>();
+        Set<String> priceWarnings = new HashSet<>();
 
         List<EWaybill> ewaybills = eWaybillRepository.findAllById(ewaybillIds);
         if (ewaybills.isEmpty()) {
             throw new IllegalArgumentException("Hesaplama için en az bir geçerli irsaliye seçilmelidir.");
         }
 
-        if (!ewaybills.stream().allMatch(e -> e.getCustomer().getId().equals(customerId))) {
-            throw new IllegalArgumentException("Seçilen irsaliyeler, belirtilen müşteri ile eşleşmiyor.");
+        Customer mainCustomer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+
+        String mainCustomerTaxNumber = Optional.ofNullable(mainCustomer.getTaxInfo())
+                .map(TaxInfo::getTaxNumber)
+                .orElseThrow(() -> new IllegalStateException("Ana müşterinin vergi bilgisi bulunamadı."));
+
+        for (EWaybill ew : ewaybills) {
+            String taxNumber = Optional.ofNullable(ew.getCustomer().getTaxInfo()).map(TaxInfo::getTaxNumber).orElse("");
+            if (!mainCustomerTaxNumber.equals(taxNumber)) {
+                throw new IllegalArgumentException("Seçilen irsaliyelerden biri (" + ew.getEwaybillNumber() + "), fatura kesilen müşteri ile aynı vergi numarasına sahip değil.");
+            }
         }
 
-        // Geçici bir anahtar sınıfı (record) tanımlıyoruz.
-        // Bu anahtar, gruplama için kullanılacak: ürün, fiyat ve kdv oranı.
+        Map<Long, CustomerProductAssignment> mainCustomerAssignments = customerProductAssignmentRepository.findByCustomerId(customerId)
+                .stream()
+                .collect(Collectors.toMap(cpa -> cpa.getProduct().getId(), Function.identity()));
+
+        List<EWaybillItem> allItems = ewaybills.stream().flatMap(ew -> ew.getItems().stream()).collect(Collectors.toList());
+
+        for (EWaybillItem item : allItems) {
+            Long productId = item.getProduct().getId();
+
+            if (!mainCustomerAssignments.containsKey(productId)) {
+                errors.add(String.format("'%s' ürünü, fatura kesilen ana müşteriye (%s) atanmamış.",
+                        item.getProductNameSnapshot(),
+                        mainCustomer.getName()
+                ));
+                continue;
+            }
+
+            CustomerProductAssignment assignmentForWarning = mainCustomerAssignments.get(productId);
+            LocalDateTime priceUpdateDate = assignmentForWarning.getPriceUpdatedAt();
+            LocalDateTime ewaybillIssueDate = item.getEWaybill().getIssueDate().atTime(item.getEWaybill().getIssueTime());
+
+            if (priceUpdateDate != null && priceUpdateDate.isAfter(ewaybillIssueDate)) {
+                priceWarnings.add(String.format("'%s' ürünü için fiyat değişti. Etkilenen İrsaliye: %s (%s)",
+                        item.getProductNameSnapshot(),
+                        item.getEWaybill().getEwaybillNumber(),
+                        item.getEWaybill().getCustomer().getName()
+                ));
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            response.setItems(new ArrayList<>());
+            response.setErrors(new ArrayList<>(errors));
+            response.setPriceWarnings(new ArrayList<>(priceWarnings)); // Uyarıları da gönderelim
+            return response;
+        }
+
         record ProductPriceKey(Long productId, BigDecimal unitPrice, Integer vatRate) {}
 
-        // İrsaliye kalemlerini bu bileşik anahtara göre gruplayıp miktarları topluyoruz.
-        Map<ProductPriceKey, BigDecimal> groupedItems = ewaybills.stream()
-                .flatMap(e -> e.getItems().stream())
+        Map<ProductPriceKey, BigDecimal> groupedItems = allItems.stream()
                 .collect(Collectors.groupingBy(
                         item -> new ProductPriceKey(
                                 item.getProduct().getId(),
@@ -398,9 +442,7 @@ try {
                         Collectors.reducing(BigDecimal.ZERO, EWaybillItem::getQuantity, BigDecimal::add)
                 ));
 
-        // Her bir ürün ID'si için ilk karşılaşılan EWaybillItem'ı saklayarak ürün adını alıyoruz.
-        Map<Long, EWaybillItem> representativeItemMap = ewaybills.stream()
-                .flatMap(e -> e.getItems().stream())
+        Map<Long, EWaybillItem> representativeItemMap = allItems.stream()
                 .collect(Collectors.toMap(
                         item -> item.getProduct().getId(),
                         Function.identity(),
@@ -412,20 +454,19 @@ try {
                     ProductPriceKey key = entry.getKey();
                     BigDecimal totalQuantity = entry.getValue();
                     EWaybillItem representativeItem = representativeItemMap.get(key.productId());
-
                     CalculatedInvoiceItemDto dto = new CalculatedInvoiceItemDto();
                     dto.setProductId(key.productId());
                     dto.setProductName(representativeItem.getProductNameSnapshot());
                     dto.setQuantity(totalQuantity.intValue());
                     dto.setUnitPrice(key.unitPrice());
                     dto.setVatRate(key.vatRate());
-
                     return dto;
                 })
                 .collect(Collectors.toList());
 
         response.setItems(calculatedItems);
-        response.setWarnings(new ArrayList<>(warnings));
+        response.setErrors(new ArrayList<>(errors));
+        response.setPriceWarnings(new ArrayList<>(priceWarnings));
         return response;
     }
 

@@ -6,5 +6,7 @@ import java.util.List;
 @Data
 public class InvoiceCalculationResponse {
     private List<CalculatedInvoiceItemDto> items;
-    private List<String> warnings;
+    // DEĞİŞİKLİK: 'warnings' yerine iki yeni liste
+    private List<String> errors;
+    private List<String> priceWarnings;
 }
