@@ -1,6 +1,6 @@
-// src/main/java/com/firinyonetim/backend/dto/driver/response/DriverCustomerResponse.java
 package com.firinyonetim.backend.dto.driver.response;
 
+import com.firinyonetim.backend.dto.address.response.AddressResponse; // YENİ IMPORT
 import lombok.Data;
 import java.math.BigDecimal;
 import java.util.List;
@@ -11,7 +11,8 @@ public class DriverCustomerResponse {
     private String customerCode;
     private String name;
     private BigDecimal currentBalanceAmount;
-    private boolean isActive; // YENİ ALAN
+    private boolean isActive;
     private List<DriverCustomerProductAssignmentDto> productAssignments;
     private List<String> workingDays;
+    private AddressResponse address; // YENİ ALAN
 }
