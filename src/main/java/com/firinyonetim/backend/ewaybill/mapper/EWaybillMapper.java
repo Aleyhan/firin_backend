@@ -41,6 +41,7 @@ public interface EWaybillMapper {
     @Mapping(source = "product.id", target = "productId")
     @Mapping(source = "priceVatExclusive", target = "priceVatExclusive")
     @Mapping(source = "priceVatIncluded", target = "priceVatIncluded")
+    @Mapping(source = "vatRate", target = "vatRate") // YENİ MAPPING
     EWaybillItemResponse itemToItemResponseDto(EWaybillItem item);
 
     @Mapping(target = "id", ignore = true)

@@ -183,9 +183,11 @@ public class EWaybillService {
             item.setProductNameSnapshot(product.getName());
             item.setQuantity(itemDto.getQuantity());
 
-            // Fiyatları ata
             item.setPriceVatExclusive(assignment.getFinalPriceVatExclusive());
             item.setPriceVatIncluded(assignment.getFinalPriceVatIncluded());
+
+            // YENİ SATIR: KDV oranını ata
+            item.setVatRate(product.getVatRate());
 
             String unitCode = "C62";
             if (product.getUnit() != null && StringUtils.hasText(product.getUnit().getCode())) {
@@ -221,10 +223,8 @@ public class EWaybillService {
             ewaybill.setShipmentDate(request.getShipmentDate());
             ewaybill.setNotes(template.getNotes());
 
-            // DEĞİŞİKLİK BURADA: Taşıyıcı bilgilerini almak için repository kullanılıyor.
             List<RouteAssignment> assignments = routeAssignmentRepository.findByCustomerId(customerId);
             if (!assignments.isEmpty()) {
-                // Müşterinin atandığı ilk rotayı alıyoruz.
                 Route route = assignments.get(0).getRoute();
                 ewaybill.setPlateNumber(route.getPlaka());
                 if(route.getDriver() != null) {
@@ -234,7 +234,6 @@ public class EWaybillService {
                 }
             }
 
-            // Fiyat bilgisiyle birlikte kalemleri oluştur
             Map<Long, CustomerProductAssignment> assignmentsMap = customerProductAssignmentRepository
                     .findByCustomerId(customerId).stream()
                     .collect(Collectors.toMap(cpa -> cpa.getProduct().getId(), cpa -> cpa));
@@ -253,6 +252,8 @@ public class EWaybillService {
                 newItem.setUnitCode(templateItem.getUnitCode());
                 newItem.setPriceVatExclusive(assignment.getFinalPriceVatExclusive());
                 newItem.setPriceVatIncluded(assignment.getFinalPriceVatIncluded());
+                // YENİ SATIR: Şablondan oluştururken de KDV oranını ata
+                newItem.setVatRate(templateItem.getProduct().getVatRate());
                 ewaybill.getItems().add(newItem);
             });
 

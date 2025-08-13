@@ -13,4 +13,6 @@ public class EWaybillItemResponse {
     // YENİ ALANLAR
     private BigDecimal priceVatExclusive;
     private BigDecimal priceVatIncluded;
+    private Integer vatRate;
+
 }

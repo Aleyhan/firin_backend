@@ -1,5 +1,4 @@
 irsaliyeden seçerken ürünleri fiyatlarına göre eklemesi lazım, mesela bir irsaliyede ekmeek 10 tl diğer irsaliyede ekmek 12 ise irsaliyeden getir dediğimizde iki kez ekmek eklemeli ve biri 10dan biri 12 den olarka göstermeli miktarlarıyla.
-bunu yapmak için irsaliye kayıt ederken ürün fiyatı alanı olmalı,
 
 her müşteride gps konumu tutan alan olmalı,
 

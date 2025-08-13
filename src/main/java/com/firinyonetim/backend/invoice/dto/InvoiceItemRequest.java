@@ -2,6 +2,7 @@ package com.firinyonetim.backend.invoice.dto;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero; // YENİ IMPORT
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -18,6 +19,11 @@ public class InvoiceItemRequest {
     @NotNull
     @Positive
     private BigDecimal unitPrice;
+
+    // YENİ ALAN
+    @NotNull
+    @PositiveOrZero
+    private Integer vatRate;
 
     private BigDecimal discountAmount;
 

@@ -6,7 +6,8 @@ import java.math.BigDecimal;
 @Data
 public class CalculatedInvoiceItemDto {
     private Long productId;
-    private String productName; // Frontend'de göstermek için
+    private String productName;
     private int quantity;
-    private BigDecimal unitPrice; // KDV Hariç hesaplanmış fiyat
+    private BigDecimal unitPrice; // KDV Hariç
+    private Integer vatRate;      // YENİ ALAN
 }

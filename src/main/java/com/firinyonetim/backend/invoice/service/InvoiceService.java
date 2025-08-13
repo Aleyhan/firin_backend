@@ -270,11 +270,10 @@ try {
     }
 
 
-    // BU METODU BUL VE TAMAMEN DEĞİŞTİR
     @Transactional(readOnly = true)
     public InvoiceCalculationResponse calculateItemsFromEwaybills(Long customerId, List<UUID> ewaybillIds) {
         InvoiceCalculationResponse response = new InvoiceCalculationResponse();
-        Set<String> warnings = new HashSet<>();
+        Set<String> warnings = new HashSet<>(); // Uyarı mekanizmasını koruyoruz.
 
         List<EWaybill> ewaybills = eWaybillRepository.findAllById(ewaybillIds);
         if (ewaybills.isEmpty()) {
@@ -285,16 +284,7 @@ try {
             throw new IllegalArgumentException("Seçilen irsaliyeler, belirtilen müşteri ile eşleşmiyor.");
         }
 
-        // Karşılaştırma için en eski irsaliyenin tarihini bul
-        LocalDateTime oldestEwaybillDateTime = ewaybills.stream()
-                .map(e -> e.getIssueDate().atTime(e.getIssueTime()))
-                .min(LocalDateTime::compareTo)
-                .orElseThrow();
-
-        Map<Long, CustomerProductAssignment> assignmentsMap = customerProductAssignmentRepository
-                .findByCustomerId(customerId).stream()
-                .collect(Collectors.toMap(cpa -> cpa.getProduct().getId(), Function.identity()));
-
+        // BU METODUN İÇERİĞİNİ GÜNCELLE
         Map<Long, BigDecimal> productQuantities = ewaybills.stream()
                 .flatMap(e -> e.getItems().stream())
                 .collect(Collectors.groupingBy(
@@ -302,43 +292,39 @@ try {
                         Collectors.reducing(BigDecimal.ZERO, EWaybillItem::getQuantity, BigDecimal::add)
                 ));
 
+
+        // Her ürün için ilk karşılaşılan irsaliye kalemini (fiyat ve kdv oranını almak için) bul
+        Map<Long, EWaybillItem> firstItemMap = ewaybills.stream()
+                .flatMap(e -> e.getItems().stream())
+                .collect(Collectors.toMap(
+                        item -> item.getProduct().getId(),
+                        Function.identity(),
+                        (existing, replacement) -> existing // Eğer aynı ürün birden fazla irsaliyede varsa ilkini koru
+                ));
+
         List<CalculatedInvoiceItemDto> calculatedItems = new ArrayList<>();
-        productQuantities.forEach((productId, quantity) -> {
-            CustomerProductAssignment assignment = assignmentsMap.get(productId);
-            if (assignment == null) {
-                throw new IllegalStateException("İrsaliyedeki bir ürün (" + productId + ") müşteriye atanmamış.");
-            }
-
-            // FİYAT DEĞİŞİKLİĞİ KONTROLÜ
-            if (assignment.getPriceUpdatedAt() != null && assignment.getPriceUpdatedAt().isAfter(oldestEwaybillDateTime)) {
-                String warningMessage = String.format(
-                        "'%s' ürünü için irsaliye kesim tarihi ile mevcut fiyat uyuşmuyor. Manuel takip önerilir.",
-                        assignment.getProduct().getName()
-                );
-                warnings.add(warningMessage);
-            }
-
-            Product product = assignment.getProduct();
-            BigDecimal priceToUse = assignment.getSpecialPrice() != null ? assignment.getSpecialPrice() : product.getBasePrice();
-            BigDecimal vatExclusivePrice;
-
-            if (assignment.getPricingType() == PricingType.VAT_INCLUDED) {
-                BigDecimal vatMultiplier = BigDecimal.ONE.add(BigDecimal.valueOf(product.getVatRate()).divide(BigDecimal.valueOf(100)));
-                vatExclusivePrice = priceToUse.divide(vatMultiplier, 4, RoundingMode.HALF_UP);
-            } else {
-                vatExclusivePrice = priceToUse;
+        productQuantities.forEach((productId, totalQuantity) -> {
+            EWaybillItem representativeItem = firstItemMap.get(productId);
+            if (representativeItem == null) {
+                // Bu durumun oluşmaması gerekir ama bir güvenlik önlemi
+                throw new IllegalStateException("İrsaliyelerde bulunan bir ürün için kalem bilgisi bulunamadı: " + productId);
             }
 
             CalculatedInvoiceItemDto dto = new CalculatedInvoiceItemDto();
             dto.setProductId(productId);
-            dto.setProductName(product.getName());
-            dto.setQuantity(quantity.intValue());
-            dto.setUnitPrice(vatExclusivePrice);
+            dto.setProductName(representativeItem.getProductNameSnapshot());
+            dto.setQuantity(totalQuantity.intValue()); // Miktarı toplanmış miktar olarak ayarla
+
+            // Fiyatı ve KDV oranını doğrudan irsaliye kaleminden al
+            dto.setUnitPrice(representativeItem.getPriceVatExclusive());
+            // Not: InvoiceItemRequest'te vatRate alanı yok, bu bilgi Product'tan alınacak.
+            // Bu yüzden dto'ya eklemeye gerek yok, sadece unitPrice'ı doğru göndermemiz yeterli.
+
             calculatedItems.add(dto);
         });
 
         response.setItems(calculatedItems);
-        response.setWarnings(new ArrayList<>(warnings));
+        response.setWarnings(new ArrayList<>(warnings)); // Uyarı listesini (şimdilik boş) yanıta ekle
         return response;
     }
 
@@ -363,6 +349,7 @@ try {
     }
 
     private Set<InvoiceItem> processInvoiceItems(Iterable<InvoiceItemRequest> itemRequests, Invoice invoice) {
+        // BU METODUN İÇERİĞİNİ GÜNCELLE
         Set<InvoiceItem> items = new HashSet<>();
         for (InvoiceItemRequest itemRequest : itemRequests) {
             Product product = productRepository.findById(itemRequest.getProductId())
@@ -376,12 +363,15 @@ try {
             item.setDescription(itemRequest.getDescription());
             item.setDiscountAmount(itemRequest.getDiscountAmount() != null ? itemRequest.getDiscountAmount() : BigDecimal.ZERO);
 
+            // YENİ: KDV oranını product yerine request'ten alıyoruz
+            Integer vatRateValue = itemRequest.getVatRate();
+            item.setVatRate(vatRateValue);
+
             BigDecimal lineTotal = item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())).subtract(item.getDiscountAmount());
             item.setTotalPrice(lineTotal);
 
-            BigDecimal vatRate = BigDecimal.valueOf(product.getVatRate()).divide(BigDecimal.valueOf(100));
-            BigDecimal vatAmount = lineTotal.multiply(vatRate).setScale(2, RoundingMode.HALF_UP);
-            item.setVatRate(product.getVatRate());
+            BigDecimal vatRateDecimal = BigDecimal.valueOf(vatRateValue).divide(BigDecimal.valueOf(100));
+            BigDecimal vatAmount = lineTotal.multiply(vatRateDecimal).setScale(2, RoundingMode.HALF_UP);
             item.setVatAmount(vatAmount);
 
             items.add(item);
