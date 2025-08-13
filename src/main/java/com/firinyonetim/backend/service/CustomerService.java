@@ -370,13 +370,12 @@ public class CustomerService {
     }
 
     @Transactional
-    public CustomerResponse updateCustomerAddress(Long customerId, Map<String, String> updates) {
+    public CustomerResponse updateCustomerAddress(Long customerId, Map<String, Object> updates) {
         Customer customer = customerRepository.findById(customerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
 
         Address address = customer.getAddress();
         if (address == null) {
-            // Eğer adres yoksa ve güncelleme isteği geldiyse, yeni bir adres oluştur.
             if (updates == null || updates.isEmpty()) {
                 return customerMapper.toCustomerResponse(customer);
             }
@@ -387,29 +386,49 @@ public class CustomerService {
         final Address finalAddress = address;
 
         updates.forEach((key, value) -> {
-            // Değerin null olup olmadığını kontrol etmeye devam ediyoruz,
-            // ancak boş string ("") gönderilmesine izin veriyoruz ki bir alan temizlenebilsin.
-            if (value != null) {
-                switch (key) {
-                    case "details":
-                        finalAddress.setDetails(value);
-                        break;
-                    case "province":
-                        finalAddress.setProvince(value);
-                        break;
-                    case "district":
-                        finalAddress.setDistrict(value);
-                        break;
-                    // --- YENİ CASE EKLENDİ ---
-                    case "zipcode":
-                        finalAddress.setZipcode(value);
-                        break;
-                    // --- YENİ CASE SONU ---
-                    default:
-                        break;
-                }
+            // Null değerler bir alanı temizlemek için kullanılabilir, o yüzden value != null kontrolünü kaldırıyoruz.
+            // Ancak, doğru tipe cast etmeden önce null kontrolü yapmak güvenlidir.
+            switch (key) {
+                case "details":
+                    finalAddress.setDetails(value != null ? (String) value : null);
+                    break;
+                case "province":
+                    finalAddress.setProvince(value != null ? (String) value : null);
+                    break;
+                case "district":
+                    finalAddress.setDistrict(value != null ? (String) value : null);
+                    break;
+                case "zipcode":
+                    finalAddress.setZipcode(value != null ? (String) value : null);
+                    break;
+                case "latitude":
+                    finalAddress.setLatitude(value != null ? new BigDecimal(value.toString()) : null);
+                    break;
+                case "longitude":
+                    finalAddress.setLongitude(value != null ? new BigDecimal(value.toString()) : null);
+                    break;
+                default:
+                    break;
             }
         });
+
+        Customer updatedCustomer = customerRepository.save(customer);
+        return customerMapper.toCustomerResponse(updatedCustomer);
+    }
+
+    @Transactional
+    public CustomerResponse createAddressForCustomer(Long customerId, AddressRequest addressRequest) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+
+        if (customer.getAddress() != null) {
+            throw new IllegalStateException("Customer already has an address.");
+        }
+
+        // AddressMapper, request DTO'sundaki latitude ve longitude alanlarını
+        // Address entity'sine otomatik olarak mapleyecektir.
+        Address address = addressMapper.toAddress(addressRequest);
+        customer.setAddress(address);
 
         Customer updatedCustomer = customerRepository.save(customer);
         return customerMapper.toCustomerResponse(updatedCustomer);
@@ -427,22 +446,6 @@ public class CustomerService {
         TaxInfo taxInfo = taxInfoMapper.toTaxInfo(taxInfoRequest);
         taxInfo.setCustomer(customer);
         customer.setTaxInfo(taxInfo);
-
-        Customer updatedCustomer = customerRepository.save(customer);
-        return customerMapper.toCustomerResponse(updatedCustomer);
-    }
-
-    @Transactional
-    public CustomerResponse createAddressForCustomer(Long customerId, AddressRequest addressRequest) {
-        Customer customer = customerRepository.findById(customerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
-
-        if (customer.getAddress() != null) {
-            throw new IllegalStateException("Customer already has an address.");
-        }
-
-        Address address = addressMapper.toAddress(addressRequest);
-        customer.setAddress(address);
 
         Customer updatedCustomer = customerRepository.save(customer);
         return customerMapper.toCustomerResponse(updatedCustomer);

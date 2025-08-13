@@ -1,6 +1,2 @@
-
 her müşteride gps konumu tutan alan olmalı,
-
-bir müşteri başkalarının irslaiyelerini çekebilir, bu ana firma gibi davranır.
-aynı vkn tc olabilir.
 

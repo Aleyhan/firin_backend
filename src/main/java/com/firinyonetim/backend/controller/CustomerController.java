@@ -118,10 +118,11 @@ public class CustomerController {
         return ResponseEntity.ok(customerService.updateCustomerTaxInfo(customerId, updates));
     }
 
+    // BU METODUN İMZASINI GÜNCELLE
     @PatchMapping("/{customerId}/address")
     public ResponseEntity<CustomerResponse> updateCustomerAddress(
             @PathVariable Long customerId,
-            @RequestBody Map<String, String> updates) {
+            @RequestBody Map<String, Object> updates) { // Map<String, String> yerine Map<String, Object>
         return ResponseEntity.ok(customerService.updateCustomerAddress(customerId, updates));
     }
 
