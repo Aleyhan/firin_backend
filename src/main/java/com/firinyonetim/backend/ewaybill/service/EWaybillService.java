@@ -33,7 +33,9 @@ import com.firinyonetim.backend.ewaybill.dto.response.BulkSendResultDto;
 import com.firinyonetim.backend.ewaybill.dto.turkcell.TurkcellApiRequest.NoteLine; // YENİ IMPORT
 
 
-
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -403,7 +405,7 @@ public class EWaybillService {
         TurkcellApiRequest.SellerSupplierInfo sellerInfo = new TurkcellApiRequest.SellerSupplierInfo();
         sellerInfo.setIdentificationNumber(senderVkn);
         sellerInfo.setName(senderName);
-        sellerInfo.setPersonSurName(senderSurname);
+        sellerInfo.setPersonSurName(" " + senderSurname);
         sellerInfo.setCity(senderCity);
         sellerInfo.setDistrict(senderDistrict);
         sellerInfo.setCountryName(senderCountry);
@@ -507,6 +509,21 @@ public class EWaybillService {
             validateEWaybillDates(ewaybill.getIssueDate(), ewaybill.getIssueTime(), ewaybill.getShipmentDate());
 
             TurkcellApiRequest request = buildTurkcellRequest(ewaybill);
+            // ----- YENİ: JSON'u DOSYAYA YAZMA MANTIĞI BAŞLANGIÇ -----
+            try {
+                String jsonRequest = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(request);
+                Path directory = Paths.get("ewaybill_requests");
+                if (!Files.exists(directory)) {
+                    Files.createDirectories(directory);
+                }
+                Path filePath = directory.resolve(ewaybill.getId() + ".json");
+                Files.writeString(filePath, jsonRequest);
+                log.info("E-Waybill request for {} saved to: {}", ewaybill.getId(), filePath.toAbsolutePath());
+            } catch (Exception e) {
+                // Dosyaya yazma hatası ana işlemi durdurmamalı, sadece loglanmalı.
+                log.error("DEBUG: Could not save e-waybill request JSON to file for ID {}: {}", ewaybill.getId(), e.getMessage());
+            }
+            // ----- YENİ: JSON'u DOSYAYA YAZMA MANTIĞI BİTİŞ -----
 
             TurkcellApiResponse apiResponse = turkcellClient.createEWaybill(request);
 

@@ -141,7 +141,6 @@ public class TurkcellApiRequest {
     public static class SellerSupplierInfo {
         private String identificationNumber;
         private String name;
-        @JsonProperty("PersonSurName")
         private String personSurName;
         private String countryName;
         private String city;
