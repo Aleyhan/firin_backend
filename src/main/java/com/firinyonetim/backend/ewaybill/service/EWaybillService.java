@@ -17,6 +17,7 @@ import com.firinyonetim.backend.ewaybill.repository.EWaybillRepository;
 import com.firinyonetim.backend.ewaybill.repository.EWaybillTemplateRepository;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.repository.*;
+import com.firinyonetim.backend.service.CompanyInfoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -60,22 +61,8 @@ public class EWaybillService {
     private final EWaybillTemplateRepository eWaybillTemplateRepository;
     private final CustomerProductAssignmentRepository customerProductAssignmentRepository; // YENİ REPO
     private final RouteAssignmentRepository routeAssignmentRepository; // YENİ REPO
+    private final CompanyInfoService companyInfoService; // YENİ SERVİS
 
-
-    // --- EKSİK OLAN ALANLAR BURAYA EKLENDİ ---
-    @Value("${ewaybill.sender.vkn}")
-    private String senderVkn;
-    @Value("${ewaybill.sender.name}")
-    private String senderName;
-    @Value("${ewaybill.sender.surname}")
-    private String senderSurname;
-    @Value("${ewaybill.sender.city}")
-    private String senderCity;
-    @Value("${ewaybill.sender.district}")
-    private String senderDistrict;
-    @Value("${ewaybill.sender.country}")
-    private String senderCountry;
-    // --- EKSİK ALANLARIN SONU ---
 
     @Transactional(readOnly = true)
     public List<EWaybillResponse> findAll() {
@@ -360,7 +347,7 @@ public class EWaybillService {
         buyerInfo.setIdentificationNumber(taxNumber);
         buyerInfo.setName(buyerFirstName);
         if (isPerson) {
-            buyerInfo.setPersonSurName(buyerLastName);
+            buyerInfo.setPersonSurName(" " + buyerLastName);
         }
         buyerInfo.setCity(address.getProvince());
         buyerInfo.setDistrict(address.getDistrict());
@@ -379,8 +366,10 @@ public class EWaybillService {
         String vknTckn = ewaybill.getCarrierVknTckn();
         String name = ewaybill.getCarrierName();
 
-        shipmentInfo.setShipmentSenderTitle(senderName);
-        shipmentInfo.setShipmentSenderTcknVkn(senderVkn);
+        CompanyInfo senderInfo = companyInfoService.getCompanyInfoEntity();
+
+        shipmentInfo.setShipmentSenderTitle(senderInfo.getName()+" " + senderInfo.getPersonSurName());
+        shipmentInfo.setShipmentSenderTcknVkn(senderInfo.getIdentificationNumber());
 
         if (StringUtils.hasText(ewaybill.getPlateNumber())) {
             shipmentInfo.setShipmentPlateNo(ewaybill.getPlateNumber());
@@ -402,13 +391,15 @@ public class EWaybillService {
         }
         request.setDespatchShipmentInfo(shipmentInfo);
 
+
+        // --- SellerSupplierInfo (Gönderici Bilgileri) - GÜNCELLENDİ ---
         TurkcellApiRequest.SellerSupplierInfo sellerInfo = new TurkcellApiRequest.SellerSupplierInfo();
-        sellerInfo.setIdentificationNumber(senderVkn);
-        sellerInfo.setName(senderName);
-        sellerInfo.setPersonSurName(" " + senderSurname);
-        sellerInfo.setCity(senderCity);
-        sellerInfo.setDistrict(senderDistrict);
-        sellerInfo.setCountryName(senderCountry);
+        sellerInfo.setIdentificationNumber(senderInfo.getIdentificationNumber());
+        sellerInfo.setName(senderInfo.getName());
+        sellerInfo.setPersonSurName(" " + senderInfo.getPersonSurName());
+        sellerInfo.setCity(senderInfo.getCity());
+        sellerInfo.setDistrict(senderInfo.getDistrict());
+        sellerInfo.setCountryName(senderInfo.getCountryName());
         request.setSellerSupplierInfo(sellerInfo);
 
         List<TurkcellApiRequest.DespatchLine> despatchLines = new ArrayList<>();

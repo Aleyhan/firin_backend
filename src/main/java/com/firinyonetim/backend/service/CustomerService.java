@@ -358,9 +358,6 @@ public class CustomerService {
                     finalTaxInfo.setTaxOffice(value);
                     break;
                 case "taxNumber":
-                    if (taxInfoRepository.existsByTaxNumberAndCustomerIdNot(value, customerId)) {
-                        throw new IllegalStateException("Vergi numarası '" + value + "' zaten başka bir müşteri tarafından kullanılıyor.");
-                    }
                     finalTaxInfo.setTaxNumber(value);
                     break;
                 default:
@@ -425,10 +422,6 @@ public class CustomerService {
 
         if (customer.getTaxInfo() != null) {
             throw new IllegalStateException("Customer already has tax info.");
-        }
-
-        if (taxInfoRepository.existsByTaxNumber(taxInfoRequest.getTaxNumber())) {
-            throw new IllegalStateException("Tax number '" + taxInfoRequest.getTaxNumber() + "' is already in use.");
         }
 
         TaxInfo taxInfo = taxInfoMapper.toTaxInfo(taxInfoRequest);
@@ -584,6 +577,23 @@ public class CustomerService {
             throw new ResourceNotFoundException("Assignment not found for customerId: " + customerId + " and productId: " + productId);
         }
         customerProductAssignmentRepository.deleteByCustomerIdAndProductId(customerId, productId);
+    }
+
+    // YENİ METOT
+    @Transactional(readOnly = true)
+    public List<CustomerResponse> findCustomersWithSameTaxInfo(Long customerId) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
+
+        if (customer.getTaxInfo() == null || !StringUtils.hasText(customer.getTaxInfo().getTaxNumber())) {
+            // Vergi numarası yoksa sadece kendisini döndür
+            return List.of(customerMapper.toCustomerResponse(customer));
+        }
+
+        String taxNumber = customer.getTaxInfo().getTaxNumber();
+        return customerRepository.findByTaxInfoTaxNumber(taxNumber).stream()
+                .map(customerMapper::toCustomerResponse)
+                .collect(Collectors.toList());
     }
 
 

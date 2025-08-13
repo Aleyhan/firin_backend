@@ -20,7 +20,7 @@ public class TaxInfo {
     @Column(nullable = false)
     private String tradeName;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String taxNumber;
 
     @Column(nullable = false)

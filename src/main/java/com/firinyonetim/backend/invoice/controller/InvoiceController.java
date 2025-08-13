@@ -6,13 +6,16 @@ import com.firinyonetim.backend.invoice.service.InvoiceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import java.time.LocalDate; // YENİ IMPORT
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -73,10 +76,14 @@ public class InvoiceController {
         return ResponseEntity.ok(htmlContent);
     }
 
-    // YENİ ENDPOINT
-    @GetMapping("/unvoiced-ewaybills/{customerId}")
-    public ResponseEntity<List<EWaybillForInvoiceDto>> getUninvoicedEWaybills(@PathVariable Long customerId) {
-        return ResponseEntity.ok(invoiceService.getUninvoicedEWaybills(customerId));
+    // YENİ ENDPOINT: Gelişmiş filtreleme ile faturalanmamış irsaliyeleri bul
+    @GetMapping("/find-unvoiced-ewaybills")
+    public ResponseEntity<List<EWaybillForInvoiceDto>> findUninvoicedEWaybills(
+            @RequestParam Long customerId, // Faturanın kesileceği ana müşteri
+            @RequestParam(required = false) List<Long> searchCustomerIds, // Filtrelenecek müşteri ID'leri
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        return ResponseEntity.ok(invoiceService.findUninvoicedEWaybills(customerId, searchCustomerIds, startDate, endDate));
     }
 
     // BU METODU BUL VE DÖNÜŞ TİPİNİ GÜNCELLE

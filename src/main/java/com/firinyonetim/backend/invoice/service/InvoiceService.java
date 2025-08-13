@@ -1,9 +1,11 @@
 package com.firinyonetim.backend.invoice.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.firinyonetim.backend.dto.PagedResponseDto;
 import com.firinyonetim.backend.entity.*;
+import com.firinyonetim.backend.ewaybill.entity.EWaybillStatus;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.invoice.dto.*;
 import com.firinyonetim.backend.invoice.dto.turkcell.TurkcellInvoiceRequest;
@@ -22,23 +24,31 @@ import com.firinyonetim.backend.repository.ProductRepository;
 import com.firinyonetim.backend.ewaybill.entity.EWaybill;
 import com.firinyonetim.backend.ewaybill.entity.EWaybillItem;
 import com.firinyonetim.backend.ewaybill.repository.EWaybillRepository;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -55,6 +65,7 @@ public class InvoiceService {
     private final EWaybillRepository eWaybillRepository;
     private final ObjectMapper objectMapper;
     private final CustomerProductAssignmentRepository customerProductAssignmentRepository; // YENİ
+
 
     // ... (getAllInvoices, getInvoiceById, createDraftInvoice, updateDraftInvoice, deleteDraftInvoice, sendInvoice, checkAndUpdateStatuses, getInvoicePdf, getInvoiceHtml metotları aynı kalacak) ...
     @Transactional(readOnly = true)
@@ -137,6 +148,7 @@ public class InvoiceService {
         return invoiceMapper.toResponse(updatedInvoice);
     }
 
+    // BU METODU BUL VE İÇERİĞİNİ AŞAĞIDAKİ İLE DEĞİŞTİR
     private void handleRelatedEWaybills(Invoice invoice, List<UUID> ewaybillIds) {
         if (CollectionUtils.isEmpty(ewaybillIds)) {
             invoice.setRelatedDespatchesJson(null);
@@ -149,9 +161,16 @@ public class InvoiceService {
             throw new ResourceNotFoundException("Gönderilen irsaliye ID'lerinden bazıları veritabanında bulunamadı.");
         }
 
-        // DEĞİŞİKLİK: Yeni DTO yapısına göre nesne oluşturuluyor
+        // DEĞİŞİKLİK BURADA: map işlemini setter'ları kullanacak şekilde güncelledik
         List<EWaybillForInvoiceDto> relatedDespatches = ewaybills.stream()
-                .map(ew -> new EWaybillForInvoiceDto(ew.getId(), ew.getEwaybillNumber(), ew.getIssueDate().atTime(ew.getIssueTime())))
+                .map(ew -> {
+                    EWaybillForInvoiceDto dto = new EWaybillForInvoiceDto();
+                    dto.setId(ew.getId());
+                    dto.setDespatchNumber(ew.getEwaybillNumber());
+                    dto.setIssueDate(ew.getIssueDate().atTime(ew.getIssueTime()));
+                    dto.setCustomerName(ew.getCustomer().getName());
+                    return dto;
+                })
                 .collect(Collectors.toList());
         try {
             invoice.setRelatedDespatchesJson(objectMapper.writeValueAsString(relatedDespatches));
@@ -262,12 +281,91 @@ try {
     }
 
     @Transactional(readOnly = true)
-    public List<EWaybillForInvoiceDto> getUninvoicedEWaybills(Long customerId) {
-        // DEĞİŞİKLİK: Yeni DTO yapısına göre nesne oluşturuluyor
-        return eWaybillRepository.findUninvoicedEWaybillsByCustomerId(customerId).stream()
-                .map(ew -> new EWaybillForInvoiceDto(ew.getId(), ew.getEwaybillNumber(), ew.getIssueDate().atTime(ew.getIssueTime())))
+    public List<EWaybillForInvoiceDto> findUninvoicedEWaybills(Long mainCustomerId, List<Long> searchCustomerIds, LocalDate startDate, LocalDate endDate) {
+        Customer mainCustomer = customerRepository.findById(mainCustomerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + mainCustomerId));
+
+        TaxInfo taxInfo = mainCustomer.getTaxInfo();
+
+        final List<Long> finalCustomerIdsToSearch;
+
+        if (taxInfo == null || !StringUtils.hasText(taxInfo.getTaxNumber())) {
+            finalCustomerIdsToSearch = List.of(mainCustomerId);
+        } else {
+            if (searchCustomerIds == null || searchCustomerIds.isEmpty()) {
+                finalCustomerIdsToSearch = customerRepository.findByTaxInfoTaxNumber(taxInfo.getTaxNumber())
+                        .stream()
+                        .map(Customer::getId)
+                        .collect(Collectors.toList());
+            } else {
+                finalCustomerIdsToSearch = searchCustomerIds;
+            }
+        }
+
+        if (finalCustomerIdsToSearch.isEmpty()){
+            return Collections.emptyList();
+        }
+
+        Specification<EWaybill> spec = (root, query, cb) -> {
+            query.distinct(true);
+
+            // ----- GÜNCELLENMİŞ VE DAHA GÜVENİLİR SORGULAMA MANTIĞI -----
+            // 1. Faturalanmış tüm irsaliyelerin ID'lerini çeken bir alt sorgu oluştur.
+            Subquery<UUID> invoicedEwaybillsSubquery = query.subquery(UUID.class);
+            Root<Invoice> invoiceRoot = invoicedEwaybillsSubquery.from(Invoice.class);
+            // 'relatedDespatchesJson' alanını ayrıştırarak ID'leri çekmek yerine,
+            // direkt olarak 'invoice_related_e_waybills' join tablosunu kullanacağız.
+            // Bu, EWaybill ve Invoice arasında bir @ManyToMany ilişkisi gerektirir.
+            // Bu ilişkiyi kurmak yerine, daha basit bir JSONB sorgusu yazalım.
+            // NOT: Native Query'ye geçmek bu senaryoda en sağlamı olabilir. Şimdilik Specification ile devam edelim.
+
+            // Mevcut yapımızda doğrudan ilişki olmadığı için, faturalanmış irsaliyeleri Java tarafında bulup
+            // ID'lerini sorguya `NOT IN` olarak eklemek daha basit ve güvenilir olacaktır.
+            List<UUID> invoicedEwaybillIds = invoiceRepository.findAll().stream()
+                    .filter(invoice -> StringUtils.hasText(invoice.getRelatedDespatchesJson()))
+                    .flatMap(invoice -> {
+                        try {
+                            List<Map<String, Object>> despatches = objectMapper.readValue(invoice.getRelatedDespatchesJson(), new TypeReference<>() {});
+                            return despatches.stream().map(d -> UUID.fromString((String) d.get("id")));
+                        } catch (JsonProcessingException e) {
+                            return Stream.empty();
+                        }
+                    })
+                    .collect(Collectors.toList());
+
+            // ----- SORGULAMA MANTIĞI BİTİŞ -----
+
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (!invoicedEwaybillIds.isEmpty()) {
+                predicates.add(cb.not(root.get("id").in(invoicedEwaybillIds)));
+            }
+
+            predicates.add(root.get("status").in(EWaybillStatus.APPROVED, EWaybillStatus.AWAITING_APPROVAL));
+            predicates.add(root.get("customer").get("id").in(finalCustomerIdsToSearch));
+
+            if (startDate != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("issueDate"), startDate));
+            }
+            if (endDate != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("issueDate"), endDate));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        return eWaybillRepository.findAll(spec, Sort.by(Sort.Direction.DESC, "issueDate")).stream()
+                .map(ew -> {
+                    EWaybillForInvoiceDto dto = new EWaybillForInvoiceDto();
+                    dto.setId(ew.getId());
+                    dto.setDespatchNumber(ew.getEwaybillNumber());
+                    dto.setIssueDate(ew.getIssueDate().atTime(ew.getIssueTime()));
+                    dto.setCustomerName(ew.getCustomer().getName());
+                    return dto;
+                })
                 .collect(Collectors.toList());
     }
+
 
 
     @Transactional(readOnly = true)

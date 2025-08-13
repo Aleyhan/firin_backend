@@ -17,13 +17,13 @@ public interface EWaybillRepository extends JpaRepository<EWaybill, UUID>, JpaSp
     @Query("SELECT e FROM EWaybill e WHERE e.status = 'SENDING' OR e.status = 'AWAITING_APPROVAL'")
     List<EWaybill> findEWaybillsToQueryStatus();
 
-    // DEĞİŞTİRİLEN SORGUNUN NATIVE QUERY HALİ
-    // Bu sorgu, hem 'APPROVED' hem de 'AWAITING_APPROVAL' durumlarını kontrol eder
-    // ve daha önce faturalanmış irsaliyeleri filtreler.
+    // BU METODU TAMAMEN SİLİN
+    /*
     @Query(value = "SELECT * FROM e_waybills e WHERE e.customer_id = :customerId AND e.status IN ('APPROVED', 'AWAITING_APPROVAL') " +
             "AND NOT EXISTS (" +
             "  SELECT 1 FROM invoices inv, jsonb_array_elements(inv.related_despatches_json) as elem " +
             "  WHERE (elem->>'id')::uuid = e.id" +
             ") ORDER BY e.ewaybill_number DESC", nativeQuery = true)
     List<EWaybill> findUninvoicedEWaybillsByCustomerId(@Param("customerId") Long customerId);
+    */
 }

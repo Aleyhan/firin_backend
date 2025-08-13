@@ -106,9 +106,7 @@ public class SupplierService {
         if (supplier.getTaxInfo() != null) {
             throw new IllegalStateException("Supplier already has tax info.");
         }
-        if (supplierTaxInfoRepository.existsByTaxNumber(taxInfoRequest.getTaxNumber())) {
-            throw new IllegalStateException("Tax number is already in use.");
-        }
+
         SupplierTaxInfo taxInfo = taxInfoMapper.toSupplierTaxInfo(taxInfoRequest);
         taxInfo.setSupplier(supplier);
         supplier.setTaxInfo(taxInfo);

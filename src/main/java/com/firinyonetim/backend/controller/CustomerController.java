@@ -13,6 +13,7 @@ import com.firinyonetim.backend.dto.transaction.response.TransactionResponse;
 import com.firinyonetim.backend.service.CustomerService;
 import com.firinyonetim.backend.service.RouteService;
 import com.firinyonetim.backend.service.TransactionService;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -175,4 +176,11 @@ public class CustomerController {
         customerService.removeAssignedProduct(customerId, productId);
         return ResponseEntity.noContent().build();
     }
+
+    // YENİ ENDPOINT
+    @GetMapping("/{customerId}/same-tax-info")
+    public ResponseEntity<List<CustomerResponse>> getCustomersWithSameTaxInfo(@PathVariable Long customerId) {
+        return ResponseEntity.ok(customerService.findCustomersWithSameTaxInfo(customerId));
+    }
+
 }
