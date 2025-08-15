@@ -96,6 +96,7 @@ public class InvoiceService {
 
     @Transactional
     public InvoiceResponse createDraftInvoice(InvoiceCreateRequest request) {
+        validateEwaybillsNotInvoiced(request.getRelatedEWaybillIds(), null);
         User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Customer customer = customerRepository.findById(request.getCustomerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + request.getCustomerId()));
@@ -129,6 +130,9 @@ public class InvoiceService {
         if (invoice.getStatus() != InvoiceStatus.DRAFT) {
             throw new IllegalStateException("Only DRAFT invoices can be updated.");
         }
+
+        validateEwaybillsNotInvoiced(request.getRelatedEWaybillIds(), id);
+
 
         Customer customer = customerRepository.findById(request.getCustomerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + request.getCustomerId()));
@@ -573,4 +577,46 @@ try {
         invoice.setTotalVatAmount(totalVatAmount);
         invoice.setPayableAmount(totalAmount.add(totalVatAmount));
     }
+
+    private void validateEwaybillsNotInvoiced(List<UUID> ewaybillIdsToCheck, UUID currentInvoiceIdToExclude) {
+        if (CollectionUtils.isEmpty(ewaybillIdsToCheck)) {
+            return; // Kontrol edilecek irsaliye yoksa metottan çık
+        }
+
+        // Mevcut tüm faturaları çek
+        List<Invoice> allInvoices = invoiceRepository.findAll();
+
+        // Daha önce faturalanmış tüm irsaliye ID'lerini bir Set'e topla
+        Set<UUID> invoicedEwaybillIds = allInvoices.stream()
+                // Eğer bir faturayı güncelliyorsak, o faturanın kendisini bu kontrolden hariç tut
+                .filter(invoice -> !invoice.getId().equals(currentInvoiceIdToExclude))
+                .filter(invoice -> StringUtils.hasText(invoice.getRelatedDespatchesJson()))
+                .flatMap(invoice -> {
+                    try {
+                        List<Map<String, String>> despatches = objectMapper.readValue(invoice.getRelatedDespatchesJson(), new TypeReference<>() {});
+                        return despatches.stream().map(d -> UUID.fromString(d.get("id")));
+                    } catch (JsonProcessingException e) {
+                        log.error("Could not parse relatedDespatchesJson for invoice {}", invoice.getId(), e);
+                        return Stream.empty();
+                    }
+                })
+                .collect(Collectors.toSet());
+
+        // Gelen istekteki irsaliye ID'lerinden herhangi biri, faturalanmışlar listesinde var mı diye kontrol et
+        List<UUID> alreadyInvoiced = ewaybillIdsToCheck.stream()
+                .filter(invoicedEwaybillIds::contains)
+                .collect(Collectors.toList());
+
+        if (!alreadyInvoiced.isEmpty()) {
+            // Hangi irsaliyelerin zaten faturalandığını bulup hata mesajına ekle
+            String conflictingEwaybillNumbers = eWaybillRepository.findAllById(alreadyInvoiced).stream()
+                    .map(EWaybill::getEwaybillNumber)
+                    .collect(Collectors.joining(", "));
+
+            throw new IllegalStateException(
+                    String.format("Aşağıdaki irsaliyeler zaten başka bir faturaya dahil edilmiş: %s", conflictingEwaybillNumbers)
+            );
+        }
+    }
+
 }
