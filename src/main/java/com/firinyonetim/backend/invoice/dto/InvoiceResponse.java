@@ -15,6 +15,7 @@ public class InvoiceResponse {
     private UUID id;
     private Long customerId;
     private String customerName;
+    private String customerCode;
     private InvoiceStatus status;
     private InvoiceProfileType profileType;
     private InvoiceType type;

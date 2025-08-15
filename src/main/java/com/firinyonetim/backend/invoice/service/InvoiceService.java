@@ -5,7 +5,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.firinyonetim.backend.dto.PagedResponseDto;
 import com.firinyonetim.backend.entity.*;
+import com.firinyonetim.backend.ewaybill.dto.response.EWaybillItemResponse;
 import com.firinyonetim.backend.ewaybill.entity.EWaybillStatus;
+import com.firinyonetim.backend.ewaybill.mapper.EWaybillMapper;
 import com.firinyonetim.backend.exception.ResourceNotFoundException;
 import com.firinyonetim.backend.invoice.dto.*;
 import com.firinyonetim.backend.invoice.dto.turkcell.TurkcellInvoiceRequest;
@@ -64,7 +66,9 @@ public class InvoiceService {
     private final TurkcellInvoiceClient turkcellInvoiceClient;
     private final EWaybillRepository eWaybillRepository;
     private final ObjectMapper objectMapper;
-    private final CustomerProductAssignmentRepository customerProductAssignmentRepository; // YENİ
+    private final CustomerProductAssignmentRepository customerProductAssignmentRepository;
+    private final EWaybillMapper eWaybillMapper; // YENİ MAPPER
+
 
 
     // ... (getAllInvoices, getInvoiceById, createDraftInvoice, updateDraftInvoice, deleteDraftInvoice, sendInvoice, checkAndUpdateStatuses, getInvoicePdf, getInvoiceHtml metotları aynı kalacak) ...
@@ -361,6 +365,11 @@ try {
                     dto.setDespatchNumber(ew.getEwaybillNumber());
                     dto.setIssueDate(ew.getIssueDate().atTime(ew.getIssueTime()));
                     dto.setCustomerName(ew.getCustomer().getName());
+                    // YENİ KISIM: Kalemleri DTO'ya dönüştürüp ekle
+                    List<EWaybillItemResponse> itemDtos = ew.getItems().stream()
+                            .map(eWaybillMapper::itemToItemResponseDto)
+                            .collect(Collectors.toList());
+                    dto.setItems(itemDtos);
                     return dto;
                 })
                 .collect(Collectors.toList());
@@ -473,19 +482,49 @@ try {
 
     private void updateStatusFromTurkcellResponse(Invoice invoice, TurkcellInvoiceStatusResponse response) {
         invoice.setTurkcellStatus(response.getStatus());
-        invoice.setStatusMessage(response.getMessage());
+
+        String statusMessage = String.format("Status: %d - %s | Envelope Status: %d - %s",
+                response.getStatus(), response.getMessage(),
+                response.getEnvelopeStatus(), response.getEnvelopeMessage());
+
+        invoice.setStatusMessage(statusMessage);
 
         switch (response.getStatus()) {
-            case 60:
-                invoice.setStatus(InvoiceStatus.APPROVED);
+            case 20: // Kuyruk
+            case 30: // Gib'e Gönderiliyor
+            case 50: // Gib'e İletildi
+                invoice.setStatus(InvoiceStatus.SENDING);
                 break;
-            case 40:
+            case 40: // Hata
+            case 62: // Onaylama Hatası
+            case 82: // Reddetme Hatası
                 invoice.setStatus(InvoiceStatus.REJECTED_BY_GIB);
                 break;
+            case 60: // Onaylandı
+            case 65: // Otomatik Onaylandı
+                invoice.setStatus(InvoiceStatus.APPROVED);
+                break;
+            case 61: // Onaylanıyor
+                invoice.setStatus(InvoiceStatus.APPROVING);
+                break;
+            case 70: // Onay Bekliyor
+                invoice.setStatus(InvoiceStatus.AWAITING_APPROVAL);
+                break;
+            case 80: // Reddedildi
+                invoice.setStatus(InvoiceStatus.REJECTED_BY_RECIPIENT);
+                break;
+            case 81: // Reddediliyor
+                invoice.setStatus(InvoiceStatus.REJECTING);
+                break;
+            case 99: // e-Fatura İptal
+                invoice.setStatus(InvoiceStatus.CANCELLED);
+                break;
             default:
-                log.info("Invoice {} has Turkcell status: {}. Keeping internal status as SENDING.", invoice.getId(), response.getStatus());
+                log.warn("Invoice {} has unhandled Turkcell status: {}. Keeping current internal status.",
+                        invoice.getId(), response.getStatus());
                 break;
         }
+
         log.info("Updated status for invoice {}. New Turkcell status: {}, New internal status: {}",
                 invoice.getId(), invoice.getTurkcellStatus(), invoice.getStatus());
     }

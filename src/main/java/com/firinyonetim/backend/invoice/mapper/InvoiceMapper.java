@@ -10,6 +10,7 @@ public interface InvoiceMapper {
 
     @Mapping(source = "customer.id", target = "customerId")
     @Mapping(source = "customer.name", target = "customerName")
+    @Mapping(source = "customer.customerCode", target = "customerCode")
     @Mapping(source = "createdBy.username", target = "createdByUsername")
     InvoiceResponse toResponse(Invoice entity);
 }
