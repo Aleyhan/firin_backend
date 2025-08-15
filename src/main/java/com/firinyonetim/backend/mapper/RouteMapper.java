@@ -22,6 +22,7 @@ public interface RouteMapper {
 
     @Mapping(target = "routeCode", ignore = true)
     @Mapping(target = "driver", ignore = true) // Serviste set edilecek
+    @Mapping(source = "isActive", target = "active") // DTO'daki 'isActive'yi Entity'deki 'active' alanına map'le
     void updateRouteFromDto(RouteUpdateRequest dto, @MappingTarget Route route);
 
     // YENİ METOT: RouteSummaryDto'dan RouteResponse'a dönüşüm
