@@ -158,7 +158,6 @@ public class InvoiceService {
 
     private void handleRelatedEWaybills(Invoice invoice, List<UUID> ewaybillIds) {
         if (CollectionUtils.isEmpty(ewaybillIds)) {
-            // Eğer eskisinde irsaliye vardı ama yenisinde yoksa, eski irsaliyelerden fatura bilgisini temizle
             if (StringUtils.hasText(invoice.getRelatedDespatchesJson())) {
                 try {
                     List<Map<String, String>> oldDespatches = objectMapper.readValue(invoice.getRelatedDespatchesJson(), new TypeReference<>() {});
@@ -183,10 +182,9 @@ public class InvoiceService {
             throw new ResourceNotFoundException("Gönderilen irsaliye ID'lerinden bazıları veritabanında bulunamadı.");
         }
 
-        // İrsaliyelerdeki invoiceId ve invoiceNumber alanlarını güncelle
         ewaybills.forEach(ew -> {
             ew.setInvoiceId(invoice.getId());
-            ew.setInvoiceNumber(invoice.getInvoiceNumber()); // Henüz numara yoksa null olacak
+            ew.setInvoiceNumber(invoice.getInvoiceNumber());
         });
         eWaybillRepository.saveAll(ewaybills);
 
@@ -197,6 +195,10 @@ public class InvoiceService {
                     dto.setDespatchNumber(ew.getEwaybillNumber());
                     dto.setIssueDate(ew.getIssueDate().atTime(ew.getIssueTime()));
                     dto.setCustomerName(ew.getCustomer().getName());
+                    // DEĞİŞİKLİK BURADA: İrsaliye kalemlerini de DTO'ya ekliyoruz.
+                    dto.setItems(ew.getItems().stream()
+                            .map(eWaybillMapper::itemToItemResponseDto)
+                            .collect(Collectors.toList()));
                     return dto;
                 })
                 .collect(Collectors.toList());
@@ -375,39 +377,8 @@ public class InvoiceService {
 
         Specification<EWaybill> spec = (root, query, cb) -> {
             query.distinct(true);
-
-            // ----- GÜNCELLENMİŞ VE DAHA GÜVENİLİR SORGULAMA MANTIĞI -----
-            // 1. Faturalanmış tüm irsaliyelerin ID'lerini çeken bir alt sorgu oluştur.
-            Subquery<UUID> invoicedEwaybillsSubquery = query.subquery(UUID.class);
-            Root<Invoice> invoiceRoot = invoicedEwaybillsSubquery.from(Invoice.class);
-            // 'relatedDespatchesJson' alanını ayrıştırarak ID'leri çekmek yerine,
-            // direkt olarak 'invoice_related_e_waybills' join tablosunu kullanacağız.
-            // Bu, EWaybill ve Invoice arasında bir @ManyToMany ilişkisi gerektirir.
-            // Bu ilişkiyi kurmak yerine, daha basit bir JSONB sorgusu yazalım.
-            // NOT: Native Query'ye geçmek bu senaryoda en sağlamı olabilir. Şimdilik Specification ile devam edelim.
-
-            // Mevcut yapımızda doğrudan ilişki olmadığı için, faturalanmış irsaliyeleri Java tarafında bulup
-            // ID'lerini sorguya `NOT IN` olarak eklemek daha basit ve güvenilir olacaktır.
-            List<UUID> invoicedEwaybillIds = invoiceRepository.findAll().stream()
-                    .filter(invoice -> StringUtils.hasText(invoice.getRelatedDespatchesJson()))
-                    .flatMap(invoice -> {
-                        try {
-                            List<Map<String, Object>> despatches = objectMapper.readValue(invoice.getRelatedDespatchesJson(), new TypeReference<>() {});
-                            return despatches.stream().map(d -> UUID.fromString((String) d.get("id")));
-                        } catch (JsonProcessingException e) {
-                            return Stream.empty();
-                        }
-                    })
-                    .collect(Collectors.toList());
-
-            // ----- SORGULAMA MANTIĞI BİTİŞ -----
-
             List<Predicate> predicates = new ArrayList<>();
-
-            if (!invoicedEwaybillIds.isEmpty()) {
-                predicates.add(cb.not(root.get("id").in(invoicedEwaybillIds)));
-            }
-
+            predicates.add(cb.isNull(root.get("invoiceId")));
             predicates.add(root.get("status").in(EWaybillStatus.APPROVED, EWaybillStatus.AWAITING_APPROVAL));
             predicates.add(root.get("customer").get("id").in(finalCustomerIdsToSearch));
 
@@ -428,11 +399,10 @@ public class InvoiceService {
                     dto.setDespatchNumber(ew.getEwaybillNumber());
                     dto.setIssueDate(ew.getIssueDate().atTime(ew.getIssueTime()));
                     dto.setCustomerName(ew.getCustomer().getName());
-                    // YENİ KISIM: Kalemleri DTO'ya dönüştürüp ekle
-                    List<EWaybillItemResponse> itemDtos = ew.getItems().stream()
+                    // DEĞİŞİKLİK BURADA: İrsaliye kalemlerini de DTO'ya ekliyoruz.
+                    dto.setItems(ew.getItems().stream()
                             .map(eWaybillMapper::itemToItemResponseDto)
-                            .collect(Collectors.toList());
-                    dto.setItems(itemDtos);
+                            .collect(Collectors.toList()));
                     return dto;
                 })
                 .collect(Collectors.toList());

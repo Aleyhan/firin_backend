@@ -26,7 +26,7 @@ public interface EWaybillMapper {
     @Mapping(target = "despatchBuyerCustomerInfo", ignore = true)
     @Mapping(target = "sellerSupplierInfo", ignore = true)
     @Mapping(target = "despatchLines", ignore = true)
-    @Mapping(target = "notes", ignore = true) // DEĞİŞİKLİK BURADA
+    @Mapping(target = "notes", ignore = true)
     TurkcellApiRequest toTurkcellApiRequest(EWaybill eWaybill);
 
     @Mapping(source = "productNameSnapshot", target = "productName")
@@ -36,12 +36,14 @@ public interface EWaybillMapper {
     @Mapping(source = "customer.id", target = "customerId")
     @Mapping(source = "customer.name", target = "customerName")
     @Mapping(source = "createdBy.username", target = "createdByUsername")
+    @Mapping(source = "invoiceId", target = "invoiceId") // YENİ MAPPING
+    @Mapping(source = "invoiceNumber", target = "invoiceNumber") // YENİ MAPPING
     EWaybillResponse toResponseDto(EWaybill eWaybill);
 
     @Mapping(source = "product.id", target = "productId")
     @Mapping(source = "priceVatExclusive", target = "priceVatExclusive")
     @Mapping(source = "priceVatIncluded", target = "priceVatIncluded")
-    @Mapping(source = "vatRate", target = "vatRate") // YENİ MAPPING
+    @Mapping(source = "vatRate", target = "vatRate")
     EWaybillItemResponse itemToItemResponseDto(EWaybillItem item);
 
     @Mapping(target = "id", ignore = true)
@@ -56,5 +58,7 @@ public interface EWaybillMapper {
     @Mapping(target = "deliveryAddressJson", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "invoiceId", ignore = true) // Bu alan request'ten gelmez
+    @Mapping(target = "invoiceNumber", ignore = true) // Bu alan request'ten gelmez
     void updateFromRequest(EWaybillCreateRequest dto, @MappingTarget EWaybill eWaybill);
 }

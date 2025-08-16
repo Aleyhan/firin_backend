@@ -1,3 +1,4 @@
+// src/main/java/com/firinyonetim/backend/invoice/dto/InvoiceResponse.java
 package com.firinyonetim.backend.invoice.dto;
 
 import com.firinyonetim.backend.invoice.entity.InvoiceProfileType;
@@ -33,4 +34,7 @@ public class InvoiceResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Set<InvoiceItemResponse> items;
+
+    // YENİ EKLENEN ALAN
+    private String relatedDespatchesJson;
 }
