@@ -156,9 +156,23 @@ public class InvoiceService {
         return invoiceMapper.toResponse(updatedInvoice);
     }
 
-    // BU METODU BUL VE İÇERİĞİNİ AŞAĞIDAKİ İLE DEĞİŞTİR
     private void handleRelatedEWaybills(Invoice invoice, List<UUID> ewaybillIds) {
         if (CollectionUtils.isEmpty(ewaybillIds)) {
+            // Eğer eskisinde irsaliye vardı ama yenisinde yoksa, eski irsaliyelerden fatura bilgisini temizle
+            if (StringUtils.hasText(invoice.getRelatedDespatchesJson())) {
+                try {
+                    List<Map<String, String>> oldDespatches = objectMapper.readValue(invoice.getRelatedDespatchesJson(), new TypeReference<>() {});
+                    List<UUID> oldEwaybillIds = oldDespatches.stream().map(d -> UUID.fromString(d.get("id"))).collect(Collectors.toList());
+                    List<EWaybill> ewaybillsToClear = eWaybillRepository.findAllById(oldEwaybillIds);
+                    ewaybillsToClear.forEach(ew -> {
+                        ew.setInvoiceId(null);
+                        ew.setInvoiceNumber(null);
+                    });
+                    eWaybillRepository.saveAll(ewaybillsToClear);
+                } catch (JsonProcessingException e) {
+                    log.error("Could not parse old related despatches for cleanup on invoice {}", invoice.getId(), e);
+                }
+            }
             invoice.setRelatedDespatchesJson(null);
             return;
         }
@@ -169,7 +183,13 @@ public class InvoiceService {
             throw new ResourceNotFoundException("Gönderilen irsaliye ID'lerinden bazıları veritabanında bulunamadı.");
         }
 
-        // DEĞİŞİKLİK BURADA: map işlemini setter'ları kullanacak şekilde güncelledik
+        // İrsaliyelerdeki invoiceId ve invoiceNumber alanlarını güncelle
+        ewaybills.forEach(ew -> {
+            ew.setInvoiceId(invoice.getId());
+            ew.setInvoiceNumber(invoice.getInvoiceNumber()); // Henüz numara yoksa null olacak
+        });
+        eWaybillRepository.saveAll(ewaybills);
+
         List<EWaybillForInvoiceDto> relatedDespatches = ewaybills.stream()
                 .map(ew -> {
                     EWaybillForInvoiceDto dto = new EWaybillForInvoiceDto();
@@ -215,33 +235,72 @@ public class InvoiceService {
         TurkcellInvoiceRequest request = invoiceTurkcellMapper.toTurkcellRequest(invoice, settings);
 
         invoice.setStatus(InvoiceStatus.SENDING);
+        // Gönderimden önce save ederek 'SENDING' durumunu DB'ye yansıt
         invoiceRepository.save(invoice);
-try {
-            System.out.println(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(request));
-        } catch (JsonProcessingException e) {
-            System.out.println(request);
-        }
+
         try {
             TurkcellInvoiceResponse response = turkcellInvoiceClient.createInvoice(request);
             invoice.setTurkcellApiId(response.getId());
             invoice.setInvoiceNumber(response.getInvoiceNumber());
             invoice.setStatusMessage("Successfully queued for sending.");
             log.info("Invoice {} successfully sent to Turkcell API. Turkcell ID: {}", id, response.getId());
+
+            // Fatura numarası artık belli olduğu için, ilişkili irsaliyeleri tekrar güncelle
+            if (StringUtils.hasText(invoice.getRelatedDespatchesJson())) {
+                try {
+                    List<Map<String, String>> despatches = objectMapper.readValue(invoice.getRelatedDespatchesJson(), new TypeReference<>() {});
+                    List<UUID> ewaybillIds = despatches.stream().map(d -> UUID.fromString(d.get("id"))).collect(Collectors.toList());
+                    if (!ewaybillIds.isEmpty()) {
+                        List<EWaybill> relatedEwaybills = eWaybillRepository.findAllById(ewaybillIds);
+                        relatedEwaybills.forEach(ew -> {
+                            ew.setInvoiceId(invoice.getId());
+                            ew.setInvoiceNumber(invoice.getInvoiceNumber());
+                        });
+                        eWaybillRepository.saveAll(relatedEwaybills);
+                    }
+                } catch (JsonProcessingException e) {
+                    log.error("Could not parse related despatches to update invoice number for invoice {}", invoice.getId(), e);
+                }
+            }
+
         } catch (HttpClientErrorException e) {
             log.error("Error sending invoice {} to Turkcell API: {}", id, e.getResponseBodyAsString());
             invoice.setStatus(InvoiceStatus.API_ERROR);
             invoice.setStatusMessage("API Error: " + e.getResponseBodyAsString());
+            // Başarısız gönderim durumunda ilişkili irsaliyelerden fatura bilgisini temizle
+            clearInvoiceInfoFromEwaybills(invoice);
             throw new RuntimeException("Failed to send invoice to Turkcell API: " + e.getResponseBodyAsString());
         } catch (Exception e) {
             log.error("Unexpected error sending invoice {}: {}", id, e.getMessage());
             invoice.setStatus(InvoiceStatus.API_ERROR);
             invoice.setStatusMessage("Unexpected Error: " + e.getMessage());
+            clearInvoiceInfoFromEwaybills(invoice);
             throw new RuntimeException("An unexpected error occurred while sending the invoice.");
         } finally {
             invoiceRepository.save(invoice);
         }
 
         return invoiceMapper.toResponse(invoice);
+    }
+
+    // YENİ YARDIMCI METOT
+    private void clearInvoiceInfoFromEwaybills(Invoice invoice) {
+        if (StringUtils.hasText(invoice.getRelatedDespatchesJson())) {
+            try {
+                List<Map<String, String>> despatches = objectMapper.readValue(invoice.getRelatedDespatchesJson(), new TypeReference<>() {});
+                List<UUID> ewaybillIds = despatches.stream().map(d -> UUID.fromString(d.get("id"))).collect(Collectors.toList());
+                if (!ewaybillIds.isEmpty()) {
+                    List<EWaybill> relatedEwaybills = eWaybillRepository.findAllById(ewaybillIds);
+                    relatedEwaybills.forEach(ew -> {
+                        ew.setInvoiceId(null);
+                        ew.setInvoiceNumber(null);
+                    });
+                    eWaybillRepository.saveAll(relatedEwaybills);
+                }
+            } catch (JsonProcessingException e) {
+                log.error("Could not parse related despatches for cleanup on failed send for invoice {}", invoice.getId(), e);
+            }
+        }
     }
 
     @Transactional

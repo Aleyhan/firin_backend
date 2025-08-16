@@ -81,4 +81,12 @@ public class EWaybill {
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
+
+    // BU ALANLARIN EKLENDİĞİNDEN EMİN OL
+    @Column(name = "invoice_id")
+    private UUID invoiceId;
+
+    @Column(name = "invoice_number")
+    private String invoiceNumber;
+
 }

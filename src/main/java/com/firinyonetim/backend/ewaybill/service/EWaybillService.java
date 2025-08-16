@@ -4,6 +4,7 @@ package com.firinyonetim.backend.ewaybill.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.firinyonetim.backend.dto.PagedResponseDto;
 import com.firinyonetim.backend.entity.*;
 import com.firinyonetim.backend.ewaybill.dto.request.BulkEWaybillFromTemplateRequest;
 import com.firinyonetim.backend.ewaybill.dto.request.EWaybillCreateRequest;
@@ -35,6 +36,12 @@ import com.firinyonetim.backend.ewaybill.dto.response.BulkSendResponseDto;
 import com.firinyonetim.backend.ewaybill.dto.response.BulkSendResultDto;
 
 import com.firinyonetim.backend.ewaybill.dto.turkcell.TurkcellApiRequest.NoteLine; // YENİ IMPORT
+
+import com.firinyonetim.backend.dto.PagedResponseDto;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 
 import java.nio.file.Files;
@@ -71,37 +78,52 @@ public class EWaybillService {
 
     // BU METODU GÜNCELLE
     @Transactional(readOnly = true)
-    public List<EWaybillResponse> findAll() {
-        List<EWaybill> ewaybills = eWaybillRepository.findAll();
-        List<Invoice> allInvoices = invoiceRepository.findAll();
+    public PagedResponseDto<EWaybillResponse> findAllPaginated(
+            Pageable pageable, String searchText, EWaybillStatus status,
+            LocalDate startDate, LocalDate endDate, String invoicingStatus) {
 
-        // Faturalanmış tüm irsaliye ID'lerini ve fatura bilgilerini bir haritada topla
-        Map<UUID, Invoice> invoicedEwaybillMap = allInvoices.stream()
-                .filter(invoice -> StringUtils.hasText(invoice.getRelatedDespatchesJson()))
-                .flatMap(invoice -> {
-                    try {
-                        List<Map<String, String>> despatches = objectMapper.readValue(invoice.getRelatedDespatchesJson(), new TypeReference<>() {});
-                        return despatches.stream()
-                                .map(d -> UUID.fromString(d.get("id")))
-                                .map(ewaybillId -> new AbstractMap.SimpleEntry<>(ewaybillId, invoice));
-                    } catch (JsonProcessingException e) {
-                        log.error("Could not parse relatedDespatchesJson for invoice {}", invoice.getId(), e);
-                        return Stream.empty();
-                    }
-                })
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (existing, replacement) -> existing)); // Duplike key durumunda ilkini koru
+        Specification<EWaybill> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            // Taslak olmayanları getir
+            predicates.add(cb.notEqual(root.get("status"), EWaybillStatus.DRAFT));
+            predicates.add(cb.notEqual(root.get("status"), EWaybillStatus.API_ERROR));
 
-        return ewaybills.stream()
-                .map(ewaybill -> {
-                    EWaybillResponse dto = eWaybillMapper.toResponseDto(ewaybill);
-                    Invoice relatedInvoice = invoicedEwaybillMap.get(ewaybill.getId());
-                    if (relatedInvoice != null) {
-                        dto.setInvoiceId(relatedInvoice.getId());
-                        dto.setInvoiceNumber(relatedInvoice.getInvoiceNumber());
-                    }
-                    return dto;
-                })
-                .collect(Collectors.toList());
+            if (StringUtils.hasText(searchText)) {
+                String likePattern = "%" + searchText.toLowerCase() + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("customer").get("name")), likePattern),
+                        cb.like(cb.lower(root.get("ewaybillNumber")), likePattern),
+                        cb.like(cb.lower(root.get("invoiceNumber")), likePattern)
+                ));
+            }
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+            if (startDate != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("issueDate"), startDate));
+            }
+            if (endDate != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("issueDate"), endDate));
+            }
+            if (StringUtils.hasText(invoicingStatus)) {
+                if ("invoiced".equalsIgnoreCase(invoicingStatus)) {
+                    predicates.add(cb.isNotNull(root.get("invoiceId")));
+                } else if ("uninvoiced".equalsIgnoreCase(invoicingStatus)) {
+                    predicates.add(cb.isNull(root.get("invoiceId")));
+                }
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        Page<EWaybill> ewaybillPage = eWaybillRepository.findAll(spec, pageable);
+
+        // DTO'ya dönüştürme ve fatura bilgilerini ekleme (Bu kısım artık sadece bir sayfa için çalışacak)
+        // NOT: Bu yaklaşım N+1 sorununa yol açabilir. Daha da iyileştirmek için
+        // tüm faturalanmış irsaliye bilgilerini tek sorguda çekip map'leyebiliriz. Şimdilik bu şekilde bırakalım.
+        Page<EWaybillResponse> dtoPage = ewaybillPage.map(eWaybillMapper::toResponseDto);
+
+        return new PagedResponseDto<>(dtoPage);
     }
 
     @Transactional(readOnly = true)

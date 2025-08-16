@@ -1,21 +1,27 @@
 package com.firinyonetim.backend.ewaybill.controller;
 
+import com.firinyonetim.backend.dto.PagedResponseDto;
 import com.firinyonetim.backend.ewaybill.dto.request.BulkEWaybillFromTemplateRequest;
 import com.firinyonetim.backend.ewaybill.dto.request.BulkSendRequest;
 import com.firinyonetim.backend.ewaybill.dto.request.EWaybillCreateRequest;
 import com.firinyonetim.backend.ewaybill.dto.response.BulkSendResponseDto;
 import com.firinyonetim.backend.ewaybill.dto.response.EWaybillResponse;
+import com.firinyonetim.backend.ewaybill.entity.EWaybillStatus;
 import com.firinyonetim.backend.ewaybill.service.EWaybillService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Pageable;
 
+
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,8 +36,15 @@ public class EWaybillController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER', 'MUHASEBE')")
-    public ResponseEntity<List<EWaybillResponse>> getAllEWaybills() {
-        return ResponseEntity.ok(eWaybillService.findAll());
+    public ResponseEntity<PagedResponseDto<EWaybillResponse>> getAllEWaybills(
+            Pageable pageable,
+            @RequestParam(required = false) String searchText,
+            @RequestParam(required = false) EWaybillStatus status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) String invoicingStatus // "invoiced", "uninvoiced" or null
+    ) {
+        return ResponseEntity.ok(eWaybillService.findAllPaginated(pageable, searchText, status, startDate, endDate, invoicingStatus));
     }
 
     @GetMapping("/{id}")
