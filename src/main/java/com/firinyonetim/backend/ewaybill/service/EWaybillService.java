@@ -25,6 +25,7 @@ import com.firinyonetim.backend.service.CompanyInfoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -78,7 +79,7 @@ public class EWaybillService {
 
     // BU METODU GÜNCELLE
     @Transactional(readOnly = true)
-    public PagedResponseDto<EWaybillResponse> findAllPaginated(
+    public PagedResponseDto<EWaybillResponse> findSentPaginated(
             Pageable pageable, String searchText, EWaybillStatus status,
             LocalDate startDate, LocalDate endDate, String invoicingStatus) {
 
@@ -125,6 +126,24 @@ public class EWaybillService {
 
         return new PagedResponseDto<>(dtoPage);
     }
+
+    // YENİ METOT
+    @Transactional(readOnly = true)
+    public List<EWaybillResponse> findDraftsAndErrors() {
+        Specification<EWaybill> spec = (root, query, cb) ->
+                cb.or(
+                        cb.equal(root.get("status"), EWaybillStatus.DRAFT),
+                        cb.equal(root.get("status"), EWaybillStatus.API_ERROR)
+                );
+
+        List<EWaybill> ewaybills = eWaybillRepository.findAll(spec, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        // Bu basit liste için fatura bilgisi kontrolüne gerek yok.
+        return ewaybills.stream()
+                .map(eWaybillMapper::toResponseDto)
+                .collect(Collectors.toList());
+    }
+
 
     @Transactional(readOnly = true)
     public EWaybillResponse findById(UUID id) {

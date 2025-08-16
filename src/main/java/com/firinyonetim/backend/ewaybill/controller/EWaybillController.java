@@ -34,9 +34,9 @@ public class EWaybillController {
 
     private final EWaybillService eWaybillService;
 
-    @GetMapping
+    @GetMapping("/sent")
     @PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER', 'MUHASEBE')")
-    public ResponseEntity<PagedResponseDto<EWaybillResponse>> getAllEWaybills(
+    public ResponseEntity<PagedResponseDto<EWaybillResponse>> getSentEWaybills(
             Pageable pageable,
             @RequestParam(required = false) String searchText,
             @RequestParam(required = false) EWaybillStatus status,
@@ -44,8 +44,15 @@ public class EWaybillController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(required = false) String invoicingStatus // "invoiced", "uninvoiced" or null
     ) {
-        return ResponseEntity.ok(eWaybillService.findAllPaginated(pageable, searchText, status, startDate, endDate, invoicingStatus));
+        return ResponseEntity.ok(eWaybillService.findSentPaginated(pageable, searchText, status, startDate, endDate, invoicingStatus));
     }
+    // YENİ GET MAPPING
+    @GetMapping("/drafts")
+    @PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER', 'MUHASEBE')")
+    public ResponseEntity<List<EWaybillResponse>> getDraftEWaybills() {
+        return ResponseEntity.ok(eWaybillService.findDraftsAndErrors());
+    }
+
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('YONETICI', 'DEVELOPER', 'MUHASEBE')")
