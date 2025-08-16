@@ -30,9 +30,13 @@ public class InvoiceController {
     @GetMapping
     public ResponseEntity<PagedResponseDto<InvoiceResponse>> getAllInvoices(
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String searchText,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             Pageable pageable) {
-        return ResponseEntity.ok(invoiceService.getAllInvoices(status, pageable));
+        return ResponseEntity.ok(invoiceService.getAllInvoices(status, searchText, startDate, endDate, pageable));
     }
+
 
     @GetMapping("/{id}")
     public ResponseEntity<InvoiceResponse> getInvoiceById(@PathVariable UUID id) {

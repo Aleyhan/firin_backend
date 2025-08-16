@@ -47,6 +47,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -73,16 +74,44 @@ public class InvoiceService {
 
     // ... (getAllInvoices, getInvoiceById, createDraftInvoice, updateDraftInvoice, deleteDraftInvoice, sendInvoice, checkAndUpdateStatuses, getInvoicePdf, getInvoiceHtml metotları aynı kalacak) ...
     @Transactional(readOnly = true)
-    public PagedResponseDto<InvoiceResponse> getAllInvoices(String status, Pageable pageable) {
+    public PagedResponseDto<InvoiceResponse> getAllInvoices(
+            String status,
+            String searchText,
+            LocalDate startDate,
+            LocalDate endDate,
+            Pageable pageable) {
+
         Specification<Invoice> spec = (root, query, cb) -> {
-            if (status != null && !status.isEmpty()) {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (StringUtils.hasText(status)) {
                 List<InvoiceStatus> statusList = Arrays.stream(status.split(","))
                         .map(InvoiceStatus::valueOf)
                         .collect(Collectors.toList());
-                return root.get("status").in(statusList);
+                if (!statusList.isEmpty()) {
+                    predicates.add(root.get("status").in(statusList));
+                }
             }
-            return null;
+
+            if (StringUtils.hasText(searchText)) {
+                String likePattern = "%" + searchText.toLowerCase() + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("customer").get("name")), likePattern),
+                        cb.like(cb.lower(root.get("customer").get("customerCode")), likePattern),
+                        cb.like(cb.lower(root.get("invoiceNumber")), likePattern)
+                ));
+            }
+
+            if (startDate != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("issueDate"), startDate.atStartOfDay()));
+            }
+            if (endDate != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("issueDate"), endDate.atTime(LocalTime.MAX)));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
         };
+
         Page<Invoice> invoicePage = invoiceRepository.findAll(spec, pageable);
         return new PagedResponseDto<>(invoicePage.map(invoiceMapper::toResponse));
     }
