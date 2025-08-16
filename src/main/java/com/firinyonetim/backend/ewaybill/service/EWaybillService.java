@@ -264,6 +264,8 @@ public class EWaybillService {
 
     @Transactional
     public List<EWaybillResponse> createEWaybillsFromTemplates(BulkEWaybillFromTemplateRequest request) {
+        validateEWaybillDates(request.getIssueDate(), request.getIssueTime(), request.getShipmentDate());
+
         User currentUser = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         List<EWaybillResponse> createdEWaybills = new ArrayList<>();
 

@@ -21,11 +21,8 @@ public class BulkEWaybillFromTemplateRequest {
     private LocalDate issueDate;
 
     @NotNull
-    @FutureOrPresent(message = "İrsaliye tarihi geçmiş bir tarih olamaz.")
     private LocalTime issueTime;
 
     @NotNull
-    @FutureOrPresent
-    @FutureOrPresent(message = "Sevk tarihi geçmiş bir tarih olamaz.")
     private LocalDateTime shipmentDate;
 }
